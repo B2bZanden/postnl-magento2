@@ -78,18 +78,18 @@ class CustomerForm
             ScopeInterface::SCOPE_STORE
         );
 
-        if (!$isEnabled || $request->getPostValue('country_id') != 'NL') {
+        if (!$isEnabled || !array_key_exists('street', $result) || $request->getPostValue('country_id') != 'NL') {
             return $result;
         }
 
-        $housenumber     = $request->getPostValue('tig-housenumber');
-        $housenrAddition = $request->getPostValue('tig-housenumber-addition');
+        $housenumber         = $request->getPostValue('tig-housenumber');
+        $housenumberAddition = $request->getPostValue('tig-housenumber-addition');
 
-		if(isset($result['street'][0]) && isset($housenumber) && isset($housenrAddition)){
+		if(isset($result['street'][0], $housenumber, $housenumberAddition)){
 			$result['street'] = [
 				$result['street'][0],
 				$housenumber,
-				$housenrAddition
+				$housenumberAddition
 			];
 		}
 
