@@ -9,10 +9,15 @@
     valueUpdate: 'keyup',
     hasFocus: focused,
     attr: {
+        maxLength: 5,
+        minLength: 1,
         name: inputName,
         placeholder: placeholder,
         'aria-required': required,
         'aria-invalid': error() ? true : 'false',
         id: uid,
         disabled: disabled
-    }"  autocomplete="off" />
+    }"
+       autocomplete="unique-string-for-housenumber"
+       id="unique-string-for-housenumber"
+/>
