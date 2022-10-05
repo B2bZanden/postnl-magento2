@@ -56,16 +56,6 @@ define([
                 shippingAddress['extension_attributes'] = {};
             }
 
-            const houseNumberInput = $('div[name="shippingAddress.custom_attributes.tig_housenumber"] input');
-            const hNValue = houseNumberInput.val();
-            const checkValid = hNValue.match(/^\d/);
-            if(!checkValid){
-                houseNumberInput.val('');
-                houseNumberInput.trigger('change');
-                houseNumberInput[0].scrollIntoView();
-                return false;
-            }
-
             // < M2.3.0
             if (shippingAddress.customAttributes !== undefined && shippingAddress.customAttributes.tig_housenumber !== undefined) {
                 shippingAddress['extension_attributes']['tig_housenumber']          = shippingAddress.customAttributes.tig_housenumber;
@@ -79,6 +69,14 @@ define([
             if (shippingAddress.customAttributes[0].attribute_code === 'tig_housenumber') {
                 shippingAddress['extension_attributes']['tig_housenumber']          = shippingAddress.customAttributes[0].value;
                 shippingAddress['extension_attributes']['tig_housenumber_addition'] = shippingAddress.customAttributes[1].value;
+                const houseNumberInput = $('div[name="shippingAddress.custom_attributes.tig_housenumber"] input');
+                const hNValue = houseNumberInput.val();
+                const checkValid = hNValue.match(/^\d/);
+                if(!checkValid){
+                    houseNumberInput.val('');
+                    houseNumberInput.trigger('change');
+                    houseNumberInput[0].scrollIntoView();
+                }
             }
 
             return originalAction();
