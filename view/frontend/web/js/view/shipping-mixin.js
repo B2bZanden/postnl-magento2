@@ -50,6 +50,10 @@ define([
                 var originalResult = this._super();
                 var postcodeRegex = /^[1-9][0-9]{3} ?(?!sa|sd|ss)[a-z]{2}$/i;
 
+                if (!quote.shippingMethod().carrier_code) {
+                    return originalResult;
+                }
+
                 if (quote.shippingMethod().carrier_code !== 'tig_postnl') {
                     return originalResult;
                 }
