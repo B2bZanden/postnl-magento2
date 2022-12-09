@@ -13,6 +13,7 @@
         minLength: 1,
         name: inputName,
         placeholder: placeholder,
+        'aria-describedby': getDescriptionId(),
         'aria-required': required,
         'aria-invalid': error() ? true : 'false',
         id: uid,
