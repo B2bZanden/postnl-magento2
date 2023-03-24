@@ -1,5 +1,5 @@
 {
-    "name": "b2bzanden/tig-postnl-magento2",
+    "name": "tig/postnl-magento2",
     "description": "Forked TIG Magento 2 PostNL extension",
     "require": {
         "php": "~7.0|~7.1|~7.2|~7.3|~7.4|~8.1",
@@ -11,7 +11,7 @@
     },
     "type": "magento2-module",
     "license": "CC-BY-NC-ND-3.0",
-    "version": "1.12.5.1",
+    "version": "1.12.5.2",
     "authors": [
         {
             "name": "TIG",
