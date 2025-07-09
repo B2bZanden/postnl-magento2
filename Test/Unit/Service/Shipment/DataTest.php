@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Test\Unit\Service\Shipment;
 
 use TIG\PostNL\Api\Data\ShipmentInterface;
@@ -223,6 +194,7 @@ class DataTest extends TestCase
         $orderMock = $this->getFakeMock(Order::class, true);
         $this->mockFunction($orderMock, 'getDeliveryDate', null);
         $this->mockFunction($this->shipmentMock, 'getPostNLOrder', $orderMock);
+        $this->mockFunction($this->shipmentMock, 'getProductCode', '3085');
 
         $address = $this->getAddress();
         $contact = $this->getContact();
@@ -239,10 +211,12 @@ class DataTest extends TestCase
     private function addAmount($amount)
     {
         $this->mockFunction($this->shipmentMock, 'isExtraCover', !!$amount);
-        $this->mockFunction($this->shipmentMock, 'getExtraCoverAmount', $amount);
+        $this->mockFunction($this->shipmentMock, 'getInsuredTier', 'default');
+        $this->mockFunction($this->shipmentMock, 'getExtraCoverAmount', (float)$amount);
         $orderMock = $this->getFakeMock(Order::class, true);
         $this->mockFunction($orderMock, 'getDeliveryDate', null);
         $this->mockFunction($this->shipmentMock, 'getPostNLOrder', $orderMock);
+        $this->mockFunction($this->shipmentMock, 'getProductCode', '3085');
 
         $address = $this->getAddress();
         $contact = $this->getContact();
@@ -267,6 +241,7 @@ class DataTest extends TestCase
         $this->mockFunction($this->shipmentMock, 'getParcelCount', $count);
         $orderMock = $this->getFakeMock(Order::class, true);
         $this->mockFunction($orderMock, 'getDeliveryDate', null);
+        $this->mockFunction($this->shipmentMock, 'getProductCode', '3085');
         $this->mockFunction($this->shipmentMock, 'getPostNLOrder', $orderMock);
 
         /** @var Data $instance */

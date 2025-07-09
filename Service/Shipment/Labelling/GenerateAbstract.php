@@ -1,34 +1,4 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Service\Shipment\Labelling;
 
@@ -36,6 +6,8 @@ use TIG\PostNL\Api\Data\ShipmentInterface;
 use TIG\PostNL\Api\Data\ShipmentLabelInterface;
 use TIG\PostNL\Api\ShipmentLabelRepositoryInterface;
 use TIG\PostNL\Api\ShipmentRepositoryInterface;
+use TIG\PostNL\Config\Provider\PrintSettingsConfiguration;
+use TIG\PostNL\Config\Source\Settings\LabelTypeSettings;
 use TIG\PostNL\Exception as PostNLException;
 use TIG\PostNL\Helper\Data;
 use TIG\PostNL\Logging\Log;
@@ -52,7 +24,7 @@ abstract class GenerateAbstract
     private $labelling;
 
     /** @var \TIG\PostNL\Service\Shipment\Labelling\Handler $handler */
-    private $handler;
+    protected $handler;
 
     /** @var \TIG\PostNL\Logging\Log $logger */
     private $logger;
@@ -68,6 +40,7 @@ abstract class GenerateAbstract
 
     /** @var string $date */
     private $date;
+    private Data $helper;
 
     /**
      * GenerateAbstract constructor.
@@ -93,6 +66,7 @@ abstract class GenerateAbstract
         $this->shipmentLabelRepository = $shipmentLabelRepository;
         $this->shipmentRepository      = $shipmentRepository;
         $this->date                    = $helper->getDate();
+        $this->helper = $helper;
     }
 
     /**
@@ -121,8 +95,13 @@ abstract class GenerateAbstract
             $shipment->setConfirmedAt($this->date);
             $shipment->setConfirmed(true);
         }
+        // Get used label type
+        $labelFormat = $this->helper->getLabelFileFormat();
+        if ($shipment->getIsSmartReturn()) {
+            $labelFormat = LabelTypeSettings::TYPE_PDF;
+        }
 
-        $labelModels = $this->handleLabels($shipment, $responseShipments, $currentShipmentNumber);
+        $labelModels = $this->handleLabels($shipment, $responseShipments, $currentShipmentNumber, $labelFormat);
 
         $this->shipmentRepository->save($shipment);
 
@@ -192,16 +171,17 @@ abstract class GenerateAbstract
      * @param $shipment
      * @param $responseShipments
      * @param $currentShipmentNumber
+     * @param string $fileFormat
      *
      * @return ShipmentLabelInterface[]
      */
-    private function handleLabels($shipment, $responseShipments, $currentShipmentNumber)
+    protected function handleLabels($shipment, $responseShipments, $currentShipmentNumber, string $fileFormat)
     {
         $labelModels = [];
         foreach ($responseShipments as $labelItem) {
             $labelModels = array_merge(
                 $labelModels,
-                $this->getLabelModels($labelItem, $shipment, $currentShipmentNumber)
+                $this->getLabelModels($labelItem, $shipment, $currentShipmentNumber, $fileFormat)
             );
             $currentShipmentNumber++;
         }
@@ -211,27 +191,41 @@ abstract class GenerateAbstract
 
     /**
      * @param $labelItem
-     * @param $shipment
+     * @param ShipmentInterface $shipment
      * @param $currentShipmentNumber
+     * @param string $fileFormat
      *
      * @return array
      */
-    private function getLabelModels($labelItem, ShipmentInterface $shipment, $currentShipmentNumber)
+    protected function getLabelModels($labelItem, ShipmentInterface $shipment, $currentShipmentNumber, string $fileFormat)
     {
         $labelModels     = [];
         $labelItemHandle = $this->handler->handle($shipment, $labelItem->Labels->Label);
 
         foreach ($labelItemHandle['labels'] as $Label) {
-            $labelModel    = $this->save($shipment, $currentShipmentNumber, $this->getLabelContent($Label), $labelItemHandle['type'], $labelItem->ProductCodeDelivery, $this->getLabelType($Label, $labelItem->ProductCodeDelivery));
+            $labelModel    = $this->save(
+                $shipment,
+                $currentShipmentNumber,
+                $this->getLabelContent($Label),
+                $labelItemHandle['type'],
+                $labelItem->ProductCodeDelivery,
+                $this->getLabelType($Label, $labelItem->ProductCodeDelivery),
+                $fileFormat
+            );
             $labelModels[] = $labelModel;
             $this->shipmentLabelRepository->save($labelModel);
         }
 
+        $shipmentProductCode = (string)(((int)$shipment->getProductCode()) % 10000);
+
         /**
-         * If SAM returned different product code during generation, override
-         * it in PostNL Shipment table.
+         * If SAM returned different product code during generation, override it in PostNL Shipment table.
+         *
+         * POSTNLM2-1391 : Product code 2285|3285 is an exception as that is the Smart Return product code.
          */
-        if ($labelItem->ProductCodeDelivery !== $shipment->getProductCode()) {
+
+        if ($labelItem->ProductCodeDelivery !== $shipmentProductCode && $labelItem->ProductCodeDelivery !== '2285' &&
+            $labelItem->ProductCodeDelivery !== '3285') {
             $shipment->setProductCode($labelItem->ProductCodeDelivery);
         }
 
@@ -243,7 +237,7 @@ abstract class GenerateAbstract
      *
      * @return string
      */
-    private function getLabelContent($Label)
+    protected function getLabelContent($Label): string
     {
         if (is_array($Label)) {
             return $Label['Content'];
@@ -258,7 +252,7 @@ abstract class GenerateAbstract
      *
      * @return string
      */
-    private function getLabelType($Label, $productCodeDelivery)
+    protected function getLabelType($Label, $productCodeDelivery): string
     {
         if (is_array($Label)) {
             return $Label['Type'];
@@ -268,17 +262,25 @@ abstract class GenerateAbstract
     }
 
     /**
-     * @param ShipmentInterface|Shipment $shipment
+     * @param ShipmentInterface          $shipment
      * @param int                        $number
      * @param string                     $label
      * @param null|string                $type
      * @param int                        $productCode
      * @param                            $labelType
+     * @param string                     $fileFormat
      *
      * @return ShipmentLabelInterface
      */
-    public function save(ShipmentInterface $shipment, $number, $label, $type, $productCode, $labelType)
-    {
+    public function save(
+        ShipmentInterface $shipment,
+        $number,
+        $label,
+        $type,
+        $productCode,
+        $labelType,
+        string $fileFormat = LabelTypeSettings::TYPE_PDF
+    ): ShipmentLabelInterface {
         /** @var ShipmentLabelInterface $labelModel */
         $labelModel = $this->shipmentLabelFactory->create();
         $labelModel->setParentId($shipment->getId());
@@ -286,9 +288,13 @@ abstract class GenerateAbstract
         $labelModel->setLabel(base64_encode($label));
         $labelModel->setType($type ?: ShipmentLabelInterface::BARCODE_TYPE_LABEL);
         $labelModel->setProductCode($productCode);
+        $labelModel->setLabelFileFormat($fileFormat);
 
-        if ($labelType == 'Return Label') {
+        if ($labelType === 'Return Label') {
             $labelModel->isReturnLabel(true);
+        }
+        if ($shipment->getIsSmartReturn()) {
+            $labelModel->setReturnFlag($shipment->getIsSmartReturn());
         }
 
         return $labelModel;

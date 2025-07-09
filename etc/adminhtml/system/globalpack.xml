@@ -1,35 +1,5 @@
-<?xml version="1.0" encoding="UTF-8"?><!--
- *
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- *
--->
+<?xml version="1.0" encoding="UTF-8"?>
+
 <include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
     <!-- Globalpack (Worlwide shipping) section -->
     <group id="globalpack" translate="label" type="text" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
@@ -42,15 +12,15 @@
         </group>
 
         <field id="enabled" translate="label comment tooltip" sortOrder="20" type="select" showInDefault="1" showInWebsite="1" showInStore="1" canRestore="1">
-            <label>Use worldwide shipping</label>
-            <comment>Worldwide shipping uses the PostNL GlobalPack product.</comment>
+            <label>Use non-EU shipping products</label>
+            <comment>If you do not use shipments outside the EU, then leave this option deactivated.</comment>
             <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
             <config_path>tig_postnl/globalpack/enabled</config_path>
         </field>
 
         <field id="default_gp_option" translate="label comment" type="select" sortOrder="25" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
             <label>Default worldwide delivery</label>
-            <comment><![CDATA[Select the default product option for Globalpack shipments.]]></comment>
+            <comment><![CDATA[Select the default product option for shipments outside the EU.]]></comment>
             <source_model>TIG\PostNL\Config\Source\Options\DefaultOptions::getGlobalProducts</source_model>
             <config_path>tig_postnl/globalpack/default_gp_option</config_path>
             <depends>
@@ -58,12 +28,30 @@
             </depends>
         </field>
 
+        <field id="use_alternative_gp" translate="label comment" type="select" sortOrder="26" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
+            <label>Activate alternative option</label>
+            <comment><![CDATA[Enable this to use an alternative option when a shipment's total value reaches a certain amount.]]></comment>
+            <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+            <config_path>tig_postnl/globalpack/use_alternative_gp</config_path>
+        </field>
+
+        <field id="alternative_gp_map" translate="label" sortOrder="27" showInDefault="1" showInStore="1" showInWebsite="1">
+            <label>Alternative Options</label>
+            <frontend_model>TIG\PostNL\Block\Adminhtml\Config\Form\Field\AlternativeDeliveryGlobalPack</frontend_model>
+            <backend_model>TIG\PostNL\Model\Config\Backend\SerializedDeliveryForCountry</backend_model>
+            <config_path>tig_postnl/globalpack/alternative_gp_map</config_path>
+            <depends>
+                <field id="use_alternative_gp">1</field>
+            </depends>
+            <comment>Use country codes (for example "FR") to apply the rule to a specific country. Use an asterisk (*) to apply the rule to any country. To apply the same rule to multiple countries you can use a comma (for example: "FR,ES").</comment>
+        </field>
+
         <group id="barcode_settings" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
             <label>Barcode settings</label>
             <fieldset_css>tig_postnl-sub-section</fieldset_css>
             <field id="type" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Barcode Type</label>
-                <comment>The current global barcode type as supplied by PostNL. Must contain 2 letters.</comment>
+                <comment>The current global barcode type as supplied by PostNL. Must consist of 2 letters.</comment>
                 <config_path>tig_postnl/globalpack/barcode_type</config_path>
             </field>
             <field id="range" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">

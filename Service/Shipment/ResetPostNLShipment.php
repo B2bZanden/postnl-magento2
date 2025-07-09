@@ -1,35 +1,5 @@
 <?php
 
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@totalinternetgroup.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@totalinternetgroup.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 namespace TIG\PostNL\Service\Shipment;
 
 use TIG\PostNL\Service\Shipment\Track\DeleteTrack;
@@ -89,14 +59,10 @@ class ResetPostNLShipment
     /**
      * Resets the confirmation date to null.
      *
-     * @param $shipmentId
-     *
      * @throws \Magento\Framework\Exception\CouldNotDeleteException
      * @throws \Magento\Framework\Exception\CouldNotSaveException
-     *
-     * @return PostNLShipment
      */
-    public function resetShipment($shipmentId)
+    public function resetShipment(int $shipmentId, bool $fullReset = false): PostNLShipment
     {
         $postNLShipment = $this->shipmentRepository->getByShipmentId($shipmentId);
 
@@ -104,6 +70,15 @@ class ResetPostNLShipment
         $postNLShipment->setConfirmedAt(null);
         $postNLShipment->setConfirmed(false);
         $postNLShipment->setMainBarcode(null);
+        // If we need full flush of all data.
+        if ($fullReset) {
+            $postNLShipment->setShipmentCountry(null);
+            $postNLShipment->setReturnBarcode(null);
+            $postNLShipment->setIsSmartReturn(false)
+                ->setReturnBarcode(null)
+                ->setSmartReturnBarcode(null)
+                ->setSmartReturnEmailSent(false);
+        }
         $this->shipmentService->save($postNLShipment);
 
         $this->barcodeDeleteHandler->deleteAllByShipmentId($postNLShipment->getId());

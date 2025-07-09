@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to support@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact support@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Api\ShipmentManagement;
 
 use Magento\Framework\Exception\InputException;
@@ -36,20 +7,18 @@ use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Sales\Api\Data\ShipmentInterface;
 use Magento\Sales\Model\Order\Shipment;
+use TIG\PostNL\Api\Data\ShipmentLabelInterface;
 use TIG\PostNL\Api\ShipmentRepositoryInterface;
 use TIG\PostNL\Service\Handler\BarcodeHandler;
 use TIG\PostNL\Service\Shipment\Labelling\GetLabels;
 
 class GenerateLabel
 {
-    /** @var ShipmentRepositoryInterface */
-    private $shipmentRepository;
+    private ShipmentRepositoryInterface $shipmentRepository;
 
-    /** @var BarcodeHandler */
-    private $barcodeHandler;
+    private BarcodeHandler $barcodeHandler;
 
-    /** @var GetLabels */
-    private $getLabels;
+    private GetLabels $getLabels;
 
     public function __construct(
         ShipmentRepositoryInterface $shipmentRepository,
@@ -62,23 +31,26 @@ class GenerateLabel
     }
 
     /**
-     * @param $shipmentId
-     *
-     * @return bool
      * @throws InputException
      * @throws LocalizedException
      * @throws NoSuchEntityException
      */
-    public function generate($shipmentId, $smartReturns = false)
+    public function generate(int $shipmentId, $returnTypeFlag = 0): bool
     {
         $postnlShipment = $this->shipmentRepository->getByShipmentId($shipmentId);
+        // Check if smart returns could be created for this shipping
+        if ($returnTypeFlag === ShipmentLabelInterface::RETURN_LABEL_SMART_RETURN) {
+            if (!$postnlShipment->getConfirmed() && !$postnlShipment->getMainBarcode()) {
+                throw new LocalizedException(__('Smart Returns are only active after main barcode is generated.'));
+            }
+        }
 
         /** @var Shipment|ShipmentInterface $shipment */
         $shipment = $postnlShipment->getShipment();
         $shippingAddress = $shipment->getShippingAddress();
 
-        $this->barcodeHandler->prepareShipment($shipment->getId(), $shippingAddress->getCountryId(), $smartReturns);
-        $labels = $this->getLabels->get($shipment->getId(), false, true);
+        $this->barcodeHandler->prepareShipment($shipment->getId(), $shippingAddress->getCountryId(), $returnTypeFlag);
+        $labels = $this->getLabels->get($shipment->getId(), false, $returnTypeFlag);
 
         if (empty($labels)) {
             return false;

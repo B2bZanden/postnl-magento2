@@ -1,37 +1,9 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Webservices\Endpoints;
 
 use TIG\PostNL\Api\Data\ShipmentInterface;
+use TIG\PostNL\Config\Provider\PrintSettingsConfiguration;
 use TIG\PostNL\Model\Shipment;
 use TIG\PostNL\Webservices\AbstractEndpoint;
 use TIG\PostNL\Webservices\Api\Message;
@@ -56,6 +28,7 @@ class LabellingWithoutConfirm extends AbstractEndpoint
      * @var Message
      */
     private $message;
+    private PrintSettingsConfiguration $printConfiguration;
 
     /**
      * @var string
@@ -79,16 +52,19 @@ class LabellingWithoutConfirm extends AbstractEndpoint
      * @param \TIG\PostNL\Webservices\Parser\Label\Customer  $customer
      * @param \TIG\PostNL\Webservices\Api\Message            $message
      * @param \TIG\PostNL\Webservices\Parser\Label\Shipments $shipmentData
+     * @param PrintSettingsConfiguration                     $printConfiguration
      */
     public function __construct(
         Soap $soap,
         Customer $customer,
         Message $message,
-        ShipmentData $shipmentData
+        ShipmentData $shipmentData,
+        PrintSettingsConfiguration $printConfiguration
     ) {
         $this->soap = $soap;
         $this->customer = $customer;
         $this->message = $message;
+        $this->printConfiguration = $printConfiguration;
 
         parent::__construct(
             $shipmentData
@@ -105,21 +81,28 @@ class LabellingWithoutConfirm extends AbstractEndpoint
         return $this->soap->call($this, 'GenerateLabelWithoutConfirm', $this->requestParams);
     }
 
-    /**
-     * @param Shipment|ShipmentInterface $shipment
-     * @param int                        $currentShipmentNumber
-     */
-    public function setParameters($shipment, $currentShipmentNumber = 1)
+    public function setParameters(ShipmentInterface $shipment, int $currentShipmentNumber = 1): void
     {
+        $isSmartReturn = $shipment->getIsSmartReturn();
         $barcode = $shipment->getMainBarcode();
-        $printerType = ['Printertype' => 'GraphicFile|PDF'];
+        if ($isSmartReturn) {
+            $barcode = $shipment->getSmartReturnBarcode();
+        }
+        $printerType = ['Printertype' => $this->printConfiguration->getPrinterType($shipment)];
         $message = $this->message->get($barcode, $printerType);
 
         $this->requestParams = [
             'Message'   => $message,
-            'Customer'  => $this->customer->get(),
+            'Customer'  => $this->customer->get($shipment),
             'Shipments' => $this->getShipments($shipment, $currentShipmentNumber),
         ];
+        if ($isSmartReturn) {
+            $currentAddress = $this->requestParams['Customer']['Address'];
+            // Switch address places
+            $this->requestParams['Customer']['Address'] = $this->requestParams['Shipments']['Shipment'][0]['Addresses']['Address'][0];
+            $this->requestParams['Shipments']['Shipment'][0]['Addresses']['Address'][0] = $currentAddress;
+            unset($this->requestParams['Shipments']['Shipment'][0]['ReturnBarcode']);
+        }
     }
 
     /**

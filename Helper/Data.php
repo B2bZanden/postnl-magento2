@@ -1,39 +1,11 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Helper;
 
 use Magento\Framework\App\Helper\AbstractHelper;
 use Magento\Sales\Model\Order;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
+use TIG\PostNL\Config\Provider\PrintSettingsConfiguration;
 use TIG\PostNL\Config\Provider\ShippingOptions;
 use TIG\PostNL\Config\Provider\Webshop;
 
@@ -69,20 +41,24 @@ class Data extends AbstractHelper
      * @var null
      */
     private $currentDate = null;
+    private PrintSettingsConfiguration $printSettings;
 
     /**
      * @param TimezoneInterface $timezoneInterface
      * @param ShippingOptions   $shippingOptions
      * @param Webshop           $webshop
+     * @param PrintSettingsConfiguration $printSettings
      */
     public function __construct(
         TimezoneInterface $timezoneInterface,
         ShippingOptions $shippingOptions,
-        Webshop $webshop
+        Webshop $webshop,
+        PrintSettingsConfiguration $printSettings
     ) {
         $this->dateTime  = $timezoneInterface;
         $this->shippingOptions = $shippingOptions;
         $this->webshop = $webshop;
+        $this->printSettings = $printSettings;
     }
 
     /**
@@ -180,7 +156,7 @@ class Data extends AbstractHelper
     public function getTomorrowsDate()
     {
         $dateTime = $this->dateTime->date($this->getCurrentDate());
-        return date('Y-m-d ' . $dateTime->format('H:i:s'), strtotime('tomorrow'));
+        return date('d-m-Y', strtotime('tomorrow'));
     }
 
     /**
@@ -207,7 +183,7 @@ class Data extends AbstractHelper
      *
      * @return array
      */
-    public function getAllowedDeliveryOptions($country = 'NL')
+    public function getAllowedDeliveryOptions(string $country = 'NL')
     {
         $showPackageMachines = $this->shippingOptions->isPackageMachineFilterActive();
         $deliveryOptions     = [];
@@ -252,4 +228,10 @@ class Data extends AbstractHelper
 
         return $this->currentDate;
     }
+
+    public function getLabelFileFormat(): string
+    {
+        return $this->printSettings->getLabelType();
+    }
+
 }

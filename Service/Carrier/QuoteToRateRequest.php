@@ -1,41 +1,13 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Service\Carrier;
 
+use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Quote\Model\Quote\Address\RateRequest;
 use Magento\Quote\Model\Quote\Address\RateRequestFactory;
 use Magento\Checkout\Model\Session as CheckoutSession;
 use Magento\Quote\Model\Quote\Item;
+use Magento\Store\Model\ScopeInterface;
 
 class QuoteToRateRequest
 {
@@ -48,13 +20,16 @@ class QuoteToRateRequest
      * @var \Magento\Quote\Model\Quote
      */
     private $quote;
+    private ScopeConfigInterface $scopeConfig;
 
     public function __construct(
         RateRequestFactory $rateRequestFactory,
-        CheckoutSession    $session
+        CheckoutSession    $session,
+        ScopeConfigInterface $scopeConfig
     ) {
         $this->rateRequestFactory = $rateRequestFactory;
         $this->quote              = $session->getQuote();
+        $this->scopeConfig = $scopeConfig;
     }
 
     /**
@@ -64,6 +39,10 @@ class QuoteToRateRequest
     {
         $store   = $this->quote->getStore();
         $address = $this->quote->getShippingAddress();
+        $taxInclude = $this->scopeConfig->getValue(
+            'tax/calculation/price_includes_tax',
+            ScopeInterface::SCOPE_STORE
+        );
 
         /** @var RateRequest $rateRequest */
         $rateRequest = $this->rateRequestFactory->create();
@@ -76,11 +55,35 @@ class QuoteToRateRequest
         $rateRequest->setPackageWeight($this->getWeight());
         $rateRequest->setPackageValue($this->getValue());
         $rateRequest->setDestRegionId($address->getRegionId());
-        $rateRequest->setOrderSubtotal($this->quote->getSubtotal());
+        $address = $this->quote->getShippingAddress();
+        if ($address) {
+            $baseSubtotal = $taxInclude ? $address->getSubtotalInclTax() : $address->getSubtotal();
+            $packageValue = $taxInclude ? $address->getBaseSubtotalTotalInclTax() + $address->getBaseDiscountAmount() :
+                $address->getBaseSubtotal() + $address->getBaseDiscountAmount();
+        } else {
+            $baseSubtotal = $this->quote->getSubtotal();
+            $packageValue = $this->quote->getBaseSubtotalWithDiscount();
+        }
+
+        $rateRequest->setOrderSubtotal($baseSubtotal);
         $rateRequest->setFreeShipping((bool)$address->getFreeShipping());
-        $rateRequest->setPackageValueWithDiscount($address->getBaseSubtotalWithDiscount());
+        $rateRequest->setPackageValueWithDiscount($packageValue);
+        $rateRequest->setShippingAddress($address);
 
         return $rateRequest;
+    }
+
+    public function getByUpdatedAddress(string $country, string $postcode): RateRequest
+    {
+        $request = $this->get();
+        $request->setDestCountryId($country);
+        $request->setDestPostcode($postcode);
+
+        $shippingAddress = $request->getShippingAddress();
+        $shippingAddress->setCountryId($country);
+        $shippingAddress->setPostcode($postcode);
+        $request->setShippingAddress($shippingAddress);
+        return $request;
     }
 
     /**
@@ -101,7 +104,7 @@ class QuoteToRateRequest
     private function getWeight()
     {
         $weight = array_map(function (Item $item) {
-            return $item->getWeight();
+            return $item->getRowWeight();
         }, $this->quote->getAllItems());
 
         return array_sum($weight);

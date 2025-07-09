@@ -1,37 +1,8 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Config\Source\Options;
 
-use Magento\Framework\Option\ArrayInterface;
+use Magento\Framework\Data\OptionSourceInterface;
 use TIG\PostNL\Config\Provider\AbstractConfigProvider;
 use TIG\PostNL\Config\Provider\ShippingOptions;
 
@@ -40,7 +11,7 @@ use TIG\PostNL\Config\Provider\ShippingOptions;
  *      creating a circular dependency. For now we allow CS to ignore this file.
  */
 // @codingStandardsIgnoreFile
-class DefaultOptions implements ArrayInterface
+class DefaultOptions implements OptionSourceInterface
 {
     /**
      * @var ShippingOptions
@@ -79,10 +50,6 @@ class DefaultOptions implements ArrayInterface
             $flags['groups'][] = ['group' => 'id_check_options'];
         }
 
-        if ($this->shippingOptions->canUseCargoProducts()) {
-            $flags['groups'][] = ['group' => 'cargo_options'];
-        }
-
         if ($this->shippingOptions->canUseEpsBusinessProducts()) {
             $flags['groups'][] = ['group' => 'eps_package_options'];
         }
@@ -99,12 +66,14 @@ class DefaultOptions implements ArrayInterface
      */
     public function getBeProducts()
     {
-        $beProducts[] = $this->shippingOptions->canUseCargoProducts() ? $this->productOptions->getCargoOptions() : [];
         $beProducts[] = $this->productOptions->getBeOptions();
 
         if ($this->shippingOptions->isPakjegemakActive('BE')) {
             $beProducts[] = $this->productOptions->getPakjeGemakBeOptions();
         }
+        // Add package options as available for those deliveries for selection
+        $beProducts[] = $this->productOptions->getPriorityOptions();
+        $beProducts[] = $this->productOptions->getBoxableOptions();
 
         return call_user_func_array("array_merge", $beProducts);
     }
@@ -128,9 +97,10 @@ class DefaultOptions implements ArrayInterface
      */
     public function getEpsProducts()
     {
-        $epsProducts[] = $this->shippingOptions->canUsePriority() ? $this->productOptions->getPriorityOptions() : [];
-        $epsProducts[] = $this->shippingOptions->canUseEpsBusinessProducts() ? $this->productOptions->getEpsBusinessOptions() : [];
         $epsProducts[] = $this->productOptions->getEpsOptions();
+        // Add package options as available for those deliveries for selection
+        $epsProducts[] = $this->productOptions->getPriorityOptions();
+        $epsProducts[] = $this->productOptions->getBoxableOptions();
 
         return call_user_func_array("array_merge", $epsProducts);
     }
@@ -138,10 +108,42 @@ class DefaultOptions implements ArrayInterface
     /**
      * @return array
      */
+    public function getEpsBusinessProducts()
+    {
+        $epsBusinessProducts[] = $this->productOptions->getEpsBusinessOptions();
+
+        return call_user_func_array("array_merge", $epsBusinessProducts);
+    }
+
+    /**
+     * @return array
+     */
+    public function getPepsProducts()
+    {
+        $pepsProducts[] = $this->productOptions->getPriorityOptions();
+
+        return call_user_func_array("array_merge", $pepsProducts);
+    }
+
+    /**
+     * @return array
+     */
+    public function getPepsBoxableProducts()
+    {
+        $pepsBoxProducts[] = $this->productOptions->getBoxableOptions();
+
+        return call_user_func_array("array_merge", $pepsBoxProducts);
+    }
+
+    /**
+     * @return array
+     */
     public function getGlobalProducts()
     {
-        $globalProducts[] = $this->shippingOptions->canUsePriority() ? $this->productOptions->getPriorityOptions() : [];
         $globalProducts[] = $this->productOptions->getGlobalPackOptions();
+        // Add package options as available for those deliveries for selection
+        $globalProducts[] = $this->productOptions->getPriorityOptions();
+        $globalProducts[] = $this->productOptions->getBoxableOptions();
 
         return call_user_func_array("array_merge", $globalProducts);
     }
@@ -189,6 +191,13 @@ class DefaultOptions implements ArrayInterface
         return $options;
     }
 
+    public function getGuaranteedDeliveryOptions(): array
+    {
+        return $this->productOptions->getProductOptions(
+            ['isGuaranteedDelivery' => true]
+        );
+    }
+
     /**
      * @return array
      */
@@ -227,10 +236,6 @@ class DefaultOptions implements ArrayInterface
             $flags['groups'][] = ['group' => 'only_stated_address_options'];
             if ($this->shippingOptions->isIDCheckActive()) {
                 $flags['groups'][] = ['group' => 'id_check_options'];
-            }
-
-            if ($this->shippingOptions->canUseCargoProducts()) {
-                $flags['groups'][] = ['group' => 'cargo_options'];
             }
 
             if ($this->shippingOptions->canUseEpsBusinessProducts()) {

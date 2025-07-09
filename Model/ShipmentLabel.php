@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Model;
 
 use Magento\Framework\Data\Collection\AbstractDb;
@@ -45,9 +16,12 @@ class ShipmentLabel extends MagentoModel implements ShipmentLabelInterface
     const FIELD_PARENT_ID    = 'parent_id';
     const FIELD_NUMBER       = 'number';
     const FIELD_LABEL        = 'label';
+    const FIELD_LABEL_FILE   = 'label_file_type';
     const FIELD_TYPE         = 'type';
     const FIELD_PRODUCT_CODE = 'product_code';
     const FIELD_RETURN_LABEL = 'return_label';
+
+    const FIELD_SMART_RETURN = 'smart_return_label';
 
     /**
      * @var string
@@ -145,6 +119,24 @@ class ShipmentLabel extends MagentoModel implements ShipmentLabelInterface
     /**
      * @return string
      */
+    public function getLabelFileFormat()
+    {
+        return $this->getData(static::FIELD_LABEL_FILE);
+    }
+
+    /**
+     * @param string $value
+     *
+     * @return \TIG\PostNL\Api\Data\ShipmentLabelInterface
+     */
+    public function setLabelFileFormat(string $value)
+    {
+        return $this->setData(static::FIELD_LABEL_FILE, $value);
+    }
+
+    /**
+     * @return string
+     */
     public function getType()
     {
         return $this->getData(static::FIELD_TYPE);
@@ -202,5 +194,35 @@ class ShipmentLabel extends MagentoModel implements ShipmentLabelInterface
     public function isReturnLabel($value)
     {
         return $this->setData(static::FIELD_RETURN_LABEL, $value);
+    }
+
+    public function isSmartReturnLabel(int $value): ShipmentLabelInterface
+    {
+        return $this->setData(static::FIELD_SMART_RETURN, self::RETURN_LABEL_SMART_RETURN);
+    }
+
+    public function getSmartReturnLabel(): bool
+    {
+        return $this->isSmartReturnLabelFlag();
+    }
+
+    public function setReturnFlag(int $flag): ShipmentLabelInterface
+    {
+        return $this->setData(static::FIELD_SMART_RETURN, $flag);
+    }
+
+    public function getReturnFlag(): int
+    {
+        return (int)$this->getData(static::FIELD_SMART_RETURN);
+    }
+
+    public function isErsLabelFlag(): bool
+    {
+        return $this->getReturnFlag() === self::RETURN_LABEL_ERS;
+    }
+
+    public function isSmartReturnLabelFlag(): bool
+    {
+        return $this->getReturnFlag() === self::RETURN_LABEL_SMART_RETURN;
     }
 }

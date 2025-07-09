@@ -1,123 +1,76 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@totalinternetgroup.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipping;
 
-use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory;
+use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Quote\Model\Quote\Item as QuoteItem;
 use Magento\Sales\Api\Data\ShipmentItemInterface;
 use Magento\Sales\Api\OrderRepositoryInterface;
+use Magento\Sales\Model\AbstractModel;
 use Magento\Sales\Model\Order\Item as OrderItem;
 use Magento\Store\Model\ScopeInterface;
-use TIG\PostNL\Config\Provider\LetterBoxPackageConfiguration;
+use TIG\PostNL\Api\Data\OrderInterface;
+use TIG\PostNL\Config\Provider\PepsConfiguration;
 use TIG\PostNL\Config\Provider\ShippingOptions;
+use TIG\PostNL\Config\Provider\AddressConfiguration;
 
 // @codingStandardsIgnoreFile
 class LetterboxPackage
 {
-    public $totalVolume                 = 0;
-    public $totalWeight                 = 0;
-    public $hasMaximumQty               = true;
-    public $maximumWeight               = 2;
+    protected const ATTRIBUTE_KEY = 'postnl_max_qty_letterbox';
 
-    /**
-     * @var ScopeConfigInterface
-     */
-    private $scopeConfig;
+    public float $totalVolume = 0;
+    public float $totalWeight = 0;
+    public bool $hasMaximumQty = true;
+    public float $maximumWeight = 2;
 
-    /**
-     * @var LetterBoxPackageConfiguration
-     */
-    private $letterBoxPackageConfiguration;
+    protected ScopeConfigInterface $scopeConfig;
 
-    /**
-     * @var OrderRepositoryInterface
-     */
-    private $orderRepository;
+    protected PepsConfiguration $pepsConfiguration;
 
-    /**
-     * @var CollectionFactory
-     */
-    private $productCollectionFactory;
-    /**
-     * @var ShippingOptions
-     */
-    private $shippingOptions;
+    protected AddressConfiguration $addressConfiguration;
 
-    /**
-     * LetterboxPackage constructor.
-     *
-     * @param ScopeConfigInterface          $scopeConfig
-     * @param LetterBoxPackageConfiguration $letterBoxPackageConfiguration
-     * @param OrderRepositoryInterface      $orderRepository
-     * @param CollectionFactory             $productCollectionFactory
-     * @param ShippingOptions               $shippingOptions
-     */
+    protected OrderRepositoryInterface $orderRepository;
+
+    protected ShippingOptions $shippingOptions;
+    private ShippingDataProvider $shippingDataProvider;
+
     public function __construct(
         ScopeConfigInterface $scopeConfig,
-        LetterBoxPackageConfiguration $letterBoxPackageConfiguration,
         OrderRepositoryInterface $orderRepository,
-        CollectionFactory $productCollectionFactory,
-        ShippingOptions $shippingOptions
+        ShippingDataProvider $shippingDataProvider,
+        ShippingOptions $shippingOptions,
+        PepsConfiguration $pepsConfiguration,
+        AddressConfiguration $addressConfiguration
     ) {
         $this->scopeConfig = $scopeConfig;
-        $this->letterBoxPackageConfiguration = $letterBoxPackageConfiguration;
         $this->orderRepository = $orderRepository;
-        $this->productCollectionFactory = $productCollectionFactory;
+        $this->shippingDataProvider = $shippingDataProvider;
         $this->shippingOptions = $shippingOptions;
+        $this->pepsConfiguration = $pepsConfiguration;
+        $this->addressConfiguration = $addressConfiguration;
+    }
+
+    public function canFixInTheBox(array $products): bool
+    {
+        return $this->isLetterboxPackage($products);
     }
 
     /**
      * @param QuoteItem[]|OrderItem[]|ShipmentItemInterface[] $products
-     * @param $isPossibleLetterboxPackage
+     * @param bool $isPossibleLetterboxPackage
      *
      * @return bool
      */
-    public function isLetterboxPackage($products, $isPossibleLetterboxPackage)
+    public function isLetterboxPackage(array $products, bool $isPossibleLetterboxPackage = false): bool
     {
-        if ($this->shippingOptions->isLetterboxPackageActive() === false) {
+        if (!$this->isEnabled($isPossibleLetterboxPackage)) {
             return false;
         }
-
         $this->totalVolume                 = 0;
         $this->totalWeight                 = 0;
         $this->hasMaximumQty               = true;
-
-        $calculationMode = $this->letterBoxPackageConfiguration->getLetterBoxPackageCalculationMode();
-
-        // If the order is not a letterbox package but it could be we want to return true so the shipment type comment is updated on the order grid.
-        if ($calculationMode === 'manually' && !$isPossibleLetterboxPackage) {
-            return false;
-        }
 
         // When a configurable product is added Magento adds both the configurable and the simple product so we need to
         // filter the configurable product out for the calculation.
@@ -127,19 +80,16 @@ class LetterboxPackage
         foreach ($products as $product) {
             $productIds[$product->getProductId()] = $product->getTotalQty();
         }
+        $collection = $this->shippingDataProvider->loadCollection(array_keys($productIds));
 
-        $productCollection = $this->productCollectionFactory->create();
-        $productCollection->addFieldToFilter('entity_id', ['in' => array_keys($productIds)]);
-        $productCollection->addAttributeToSelect('postnl_max_qty_letterbox');
-
-        foreach ($productCollection->getItems() as $product) {
+        foreach ($collection->getItems() as $product) {
             // $productIds[$product->getId()] contains the qty, seen in the previous foreach
 
-            $this->fitsLetterboxPackage($product, $productIds[$product->getId()]);
+            $this->fitsLetterboxPackage($product, $productIds[$product->getId()], static::ATTRIBUTE_KEY);
         }
 
         // check if all products fit in a letterbox package and the weight is equal or lower than 2 kilograms.
-        if ($this->totalVolume <= 1 && $this->totalWeight <= $this->maximumWeight && $this->hasMaximumQty == true) {
+        if ($this->totalVolume <= 1 && $this->totalWeight <= $this->maximumWeight && $this->hasMaximumQty) {
             return true;
         }
 
@@ -147,19 +97,20 @@ class LetterboxPackage
     }
 
     /**
-     * @param $product
-     * @param $qty
+     * @param AbstractModel|ProductInterface $product
+     * @param float $qty
+     * @param string $attributeKey
      *
-     * Based on the product attribute postnl_max_qty_letterbox, a percentage
+     * Based on the product attribute postnl_max_qty_letterbox (or similar), a percentage
      * is calculated for each product. If, for example, the attribute is set
      * to 4, each product will weight 25%. If the products in the cart
      * have a total weight of over 100%, the order will not fit as a letterbox.
      */
-    public function fitsLetterboxPackage($product, $qty)
+    public function fitsLetterboxPackage($product, $qty, string $attributeKey): void
     {
-        $maximumQtyLetterbox = floatval($product->getPostnlMaxQtyLetterbox());
+        $maximumQtyLetterbox = (float)$product->getData($attributeKey);
 
-        if ($maximumQtyLetterbox === 0.0) {
+        if ($maximumQtyLetterbox < PHP_FLOAT_EPSILON) {
             $this->hasMaximumQty = false;
             return;
         }
@@ -169,10 +120,10 @@ class LetterboxPackage
     }
 
     /**
-     * @param $product
-     * @param $orderedQty
+     * @param AbstractModel|ProductInterface $product
+     * @param float $orderedQty
      */
-    public function getTotalWeight($product, $orderedQty)
+    public function getTotalWeight($product, $orderedQty): void
     {
         $weightUnit = $this->scopeConfig->getValue(
             'general/locale/weight_unit',
@@ -188,21 +139,21 @@ class LetterboxPackage
     }
 
     /**
-     * @param \TIG\PostNL\Model\Order $order
+     * @param OrderInterface $order
      *
      * @return bool
      * @throws \Magento\Framework\Exception\InputException
      * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
-    public function isPossibleLetterboxPackage($order)
+    public function isPossibleLetterboxPackage(OrderInterface $order): bool
     {
         $magentoOrder = $this->orderRepository->get($order->getQuoteId());
-        $products = $magentoOrder->getAllItems();
         $shippingAddress = $order->getShippingAddress();
 
         if ($order->getProductCode() == '3085' &&
-            $this->isLetterboxPackage($products, true) &&
-            $shippingAddress->getCountryId() == 'NL') {
+            $shippingAddress->getCountryId() === 'NL' &&
+            $this->isLetterboxPackage($magentoOrder->getAllItems(), true)
+        ) {
             return true;
         }
 
@@ -223,5 +174,15 @@ class LetterboxPackage
         }
 
         return $products;
+    }
+
+    protected function isEnabled(bool $isPossibleLetterboxPackage = false): bool
+    {
+        // If the order is not a letterbox package but it could be we want to return true so the shipment type comment is updated on the order grid.
+        if (!$isPossibleLetterboxPackage && $this->shippingOptions->isLetterboxPackageActive() === false) {
+            return false;
+        }
+
+        return true;
     }
 }

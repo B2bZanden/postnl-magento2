@@ -1,36 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
- *
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- *
--->
+
 <include xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_include.xsd">
     <!--General configuration section-->
     <group id="developer_settings" translate="label" type="text" sortOrder="900" showInDefault="1" showInWebsite="1" showInStore="1">
@@ -40,12 +9,34 @@
 
         <group id="logging" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
             <label>Logging</label>
-            <comment><![CDATA[Log files will be created within the var/log/PostNL/ directory. You can find more information about the different kind of log files <a href="https://confluence.tig.nl/display/SDPOSTNL/PostNL+Magento+2+logging" target="_blank" title="PostNL log files">here</a>.]]></comment>
+            <comment><![CDATA[Log files will be created within the var/log/PostNL/ directory. You can find more information about the different kind of log files <a href="https://postnl.github.io/magento2/?lang=nl#6_1" target="_blank" title="PostNL log files">here</a>.]]></comment>
             <fieldset_css>tig_postnl-sub-section</fieldset_css>
             <field id="types" translate="label" type="multiselect" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="1">
                 <label>Types of logging</label>
                 <source_model>TIG\PostNL\Config\Source\General\Logging</source_model>
                 <config_path>tig_postnl/developer_settings/types</config_path>
+            </field>
+        </group>
+
+        <group id="config_dump" translate="label comment" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+            <label>Config Dump</label>
+            <comment><![CDATA[Allows to export and import full PostNL configurations for debugging purposes, excluding sensitive data. Also available as a console command.]]></comment>
+            <fieldset_css>tig_postnl-sub-section</fieldset_css>
+
+            <field id="add_matrix" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="0">
+                <label>Add Matrix Table to the export</label>
+                <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                <comment><![CDATA[Do not forget to save after changing and before exporting.]]></comment>
+            </field>
+
+            <field id="config_export" translate="label" type="TIG\PostNL\Block\Adminhtml\Config\Debug\Export" sortOrder="100" showInDefault="1" showInWebsite="0" showInStore="0">
+                <label>Export configurations</label>
+            </field>
+
+            <field id="config_import" translate="label" type="file" sortOrder="150" showInDefault="1" showInWebsite="0" showInStore="0" canRestore="0">
+                <label>Import Configurations</label>
+                <backend_model>TIG\PostNL\Config\Debug\Import</backend_model>
+                <comment><![CDATA[When updating matrix rates from another magento store please note that you might need to adjust store ids to the current website store id or code. Ex: matrixrate":{"1" - this number is what should be changed.]]></comment>
             </field>
         </group>
 

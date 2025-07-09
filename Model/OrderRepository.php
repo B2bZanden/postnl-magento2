@@ -1,42 +1,13 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 // @codingStandardsIgnoreFile
-
 namespace TIG\PostNL\Model;
 
 use Magento\Framework\Api\FilterBuilder;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Api\SearchResultsInterfaceFactory;
+use Magento\Framework\Api\SortOrder;
+use Magento\Framework\Api\SortOrderBuilder;
 use Magento\Framework\Exception\CouldNotDeleteException;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\NoSuchEntityException;
@@ -47,20 +18,13 @@ use TIG\PostNL\Service\Wrapper\QuoteInterface;
 
 class OrderRepository extends AbstractRepository implements OrderRepositoryInterface
 {
-    /**
-     * @var OrderFactory
-     */
-    private $orderFactory;
+    private OrderFactory $orderFactory;
 
-    /**
-     * @var QuoteInterface
-     */
-    private $quoteWrapper;
+    private QuoteInterface $quoteWrapper;
 
-    /**
-     * @var FilterBuilder
-     */
-    private $filterBuilder;
+    private FilterBuilder $filterBuilder;
+
+    private SortOrderBuilder $sortOrderBuilder;
 
     /**
      * OrderRepository constructor.
@@ -78,12 +42,14 @@ class OrderRepository extends AbstractRepository implements OrderRepositoryInter
         OrderFactory $orderFactory,
         CollectionFactory $collectionFactory,
         QuoteInterface $quote,
-        FilterBuilder $filterBuilder
+        FilterBuilder $filterBuilder,
+        SortOrderBuilder $sortOrderBuilder
     ) {
         $this->quoteWrapper      = $quote;
         $this->orderFactory      = $orderFactory;
         $this->collectionFactory = $collectionFactory;
         $this->filterBuilder     = $filterBuilder;
+        $this->sortOrderBuilder = $sortOrderBuilder;
 
         parent::__construct($searchResultsFactory, $searchCriteriaBuilder);
     }
@@ -186,8 +152,12 @@ class OrderRepository extends AbstractRepository implements OrderRepositoryInter
         if ($quoteId === null) {
             $quoteId = $this->quoteWrapper->getQuoteId();
         }
+        $sortOrder = $this->sortOrderBuilder
+            ->setField(OrderInterface::ENTITY_ID)
+            ->setDirection(SortOrder::SORT_DESC)
+            ->create();
 
-        return $this->getByFieldWithValue('quote_id', $quoteId);
+        return $this->getByFieldWithValue('quote_id', $quoteId, $sortOrder);
     }
 
     /**
@@ -234,7 +204,7 @@ class OrderRepository extends AbstractRepository implements OrderRepositoryInter
     {
         $collection = $this->collectionFactory->create();
         $collection->addFieldToFilter('quote_id', $quoteId);
-        $collection->setOrder('entity_id', $collection::SORT_ORDER_DESC);
+        $collection->setOrder(OrderInterface::ENTITY_ID, $collection::SORT_ORDER_DESC);
 
         if ($collection->getSize() > 0) {
             return $collection->getFirstItem();

@@ -1,34 +1,4 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Helper;
 
@@ -40,6 +10,7 @@ class AddressEnhancer
     // @codingStandardsIgnoreLine
     const STREET_SPLIT_NAME_FROM_NUMBER = '/^(?P<street>\d*[\wäöüßÀ-ÖØ-öø-ÿĀ-Ž\d \'\‘\`\-\.]+)[,\s]+(?P<number>\d+)\s*(?P<addition>[\wäöüß\d\-\/]*)$/i';
     // @codingStandardsIgnoreLine
+    const STREET_SPLIT_NAME_FROM_NUMBER_BE = '/^(?P<street>\d*[\wäöüßÀ-ÖØ-öø-ÿĀ-Ž\d \'\‘\`\-\.]+)[,\s]+(?P<number>\d+)\s*(?P<addition>bus\s?[\wäöüß\d\-\/]*)$/i';
     const STREET_SPLIT_NUMBER_FROM_NAME = '/^(?P<number>\d+)\s*(?P<street>[\wäöüßÀ-ÖØ-öø-ÿĀ-Ž\d \'\‘\`\-\.]*)$/i';
 
     /** @var Config $config */
@@ -126,12 +97,25 @@ class AddressEnhancer
     protected function extractHousenumber($address)
     {
         $street = $address['street'];
+        $isBe = isset($address['country']) ?? $address['country'] === 'BE';
 
         if (is_array($address['street'])) {
             $street  = implode(' ', $address['street']);
+        } else {
+            $street = (string)$street;
+        }
+        $street = trim($street);
+        $matched = false;
+        // Check specific BE case for buses
+        if ($isBe) {
+            $matched = preg_match(self::STREET_SPLIT_NAME_FROM_NUMBER_BE, $street, $result);
         }
 
-        $matched = preg_match(self::STREET_SPLIT_NAME_FROM_NUMBER, trim($street), $result);
+        // Default approach of extracting house number
+        if (!$matched) {
+            $matched = preg_match(self::STREET_SPLIT_NAME_FROM_NUMBER, $street, $result);
+        }
+
         if (!$matched) {
             $result = $this->extractStreetFromNumber($street);
         }
@@ -153,7 +137,7 @@ class AddressEnhancer
     // @codingStandardsIgnoreLine
     protected function extractStreetFromNumber($street)
     {
-        $matched = preg_match(self::STREET_SPLIT_NUMBER_FROM_NAME, trim($street), $result);
+        $matched = preg_match(self::STREET_SPLIT_NUMBER_FROM_NAME, $street, $result);
         if (!$matched) {
             return [
                 'error' => [

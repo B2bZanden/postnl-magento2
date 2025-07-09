@@ -1,45 +1,17 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@totalinternetgroup.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Controller\Adminhtml\Order;
 
 use Laminas\Mime\Mime;
 use Magento\Framework\App\Area;
 use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Mail\Template\TransportBuilder;
 use Magento\Framework\Translate\Inline\StateInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
 use TIG\PostNL\Config\Provider\ReturnOptions;
+use TIG\PostNL\Config\Source\Settings\ReturnTypes;
 
 class Email
 {
@@ -124,8 +96,6 @@ class Email
                                                 ->addAttachment(
                                                     base64_decode($fileContent),
                                                     'text/pdf',
-                                                    Mime::DISPOSITION_ATTACHMENT,
-                                                    Mime::ENCODING_BASE64,
                                                     $fileName
                                                 )
                                                 ->addTo($toEmail)
@@ -141,13 +111,19 @@ class Email
      * @param $labels
      *
      * @return mixed
+     * @throws LocalizedException
      */
     public function getLabel($labels)
     {
+        $compareCode = $this->returnOptions->getReturnTo() === ReturnTypes::TYPE_FREE_POST ? '2285' : '3285';
+        $returnLabels = [];
         foreach ($labels as $key => $label) {
-            if ($label->getProductCode() === '2285' && $label->getReturnLabel() !== '1') {
+            if ($label->getProductCode() === $compareCode && $label->getReturnLabel() !== '1') {
                 $returnLabels[$key] = $label->getEntityId();
             }
+        }
+        if (empty($returnLabels)) {
+            throw new LocalizedException(__('No return labels were generated.'));
         }
         $key = array_keys($returnLabels, max($returnLabels))[0];
 

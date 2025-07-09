@@ -1,34 +1,4 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Service\Carrier\Price;
 
@@ -37,10 +7,10 @@ use Magento\Framework\Exception\LocalizedException;
 use Magento\Quote\Model\Quote\Address\RateRequest;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Tax\Helper\Data;
+use Magento\Tax\Model\Config;
 use TIG\PostNL\Config\Source\Carrier\RateType;
 use TIG\PostNL\Service\Carrier\ParcelTypeFinder;
 use TIG\PostNL\Service\Shipping\GetFreeBoxes;
-use TIG\PostNL\Service\Shipping\LetterboxPackage;
 
 // @codingStandardsIgnoreFile
 class Calculator
@@ -76,11 +46,6 @@ class Calculator
     private $parcelTypeFinder;
 
     /**
-     * @var LetterboxPackage
-     */
-    private $letterboxPackage;
-
-    /**
      * @var Data
      */
     private $taxHelper;
@@ -93,7 +58,6 @@ class Calculator
      * @param Matrixrate           $matrixratePrice
      * @param Tablerate            $tablerateShippingPrice
      * @param ParcelTypeFinder     $parcelTypeFinder
-     * @param LetterboxPackage     $letterboxPackage
      * @param Data                 $taxHelper
      */
     public function __construct(
@@ -102,7 +66,6 @@ class Calculator
         Matrixrate           $matrixratePrice,
         Tablerate            $tablerateShippingPrice,
         ParcelTypeFinder     $parcelTypeFinder,
-        LetterboxPackage     $letterboxPackage,
         Data                 $taxHelper
     ) {
         $this->scopeConfig            = $scopeConfig;
@@ -110,7 +73,6 @@ class Calculator
         $this->matrixratePrice        = $matrixratePrice;
         $this->tablerateShippingPrice = $tablerateShippingPrice;
         $this->parcelTypeFinder       = $parcelTypeFinder;
-        $this->letterboxPackage       = $letterboxPackage;
         $this->taxHelper              = $taxHelper;
     }
 
@@ -172,6 +134,7 @@ class Calculator
                 return $this->priceResponse('0.00', '0.00');
             case RateType::CARRIER_RATE_TYPE_MATRIX:
                 $ratePrice = $this->matrixratePrice->getRate($request, $parcelType, $this->store);
+
                 if ($ratePrice !== false) {
                     return $this->priceResponse($ratePrice['price'], $ratePrice['cost']);
                 }
@@ -187,6 +150,9 @@ class Calculator
             case RateType::CARRIER_RATE_TYPE_FLAT:
             default:
                 $price = $this->getConfigData('price');
+                if ($parcelType === 'pakjegemak' && $this->getConfigData('is_other_price_for_pickup')) {
+                    $price = $this->getConfigData('pickup_price');
+                }
 
                 return $this->priceResponse($price, $price);
         }
@@ -266,10 +232,14 @@ class Calculator
      */
     public function getPriceWithTax(RateRequest $request, $parcelType = null)
     {
+        $includeVat = $this->taxHelper->getShippingPriceDisplayType();
+        $includeVat = ($includeVat === Config::DISPLAY_TYPE_INCLUDING_TAX || $includeVat === Config::DISPLAY_TYPE_BOTH);
+
         $price = $this->price($request, $parcelType);
+        $shippingAddress = $request->getShippingAddress();
 
         if (isset($price['price'])) {
-            $price['price'] = $this->taxHelper->getShippingPrice($price['price'], true);
+            $price['price'] = $this->taxHelper->getShippingPrice($price['price'], $includeVat, $shippingAddress);
         }
 
         return $price;

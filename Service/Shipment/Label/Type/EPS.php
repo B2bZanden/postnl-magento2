@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipment\Label\Type;
 
 use TIG\PostNL\Api\Data\ShipmentLabelInterface;
@@ -46,12 +17,7 @@ class EPS extends Domestic
      *
      * @var array
      */
-    private $priority = [6350, 6550, 6940, 6942];
-
-    /**
-     * These are return labels that should be rotated, separate from their normal shipping labels
-     */
-    private $returnProducts = [4946];
+    private $priority = [6350, 6405, 6440, 6550, 6906, 6940, 6942, 6972];
 
     /**
      * @var bool
@@ -110,10 +76,6 @@ class EPS extends Domestic
             return true;
         }
 
-        if ($this->rotateReturnProduct($label)) {
-            return true;
-        }
-
         return false;
     }
 
@@ -125,16 +87,6 @@ class EPS extends Domestic
     public function isRotatedProduct($code)
     {
         return in_array($code, $this->rotated);
-    }
-
-    /**
-     * @param ShipmentLabelInterface $label
-     *
-     * @return bool
-     */
-    private function rotateReturnProduct($label)
-    {
-        return (in_array($label->getProductCode(), $this->returnProducts) && $label->getReturnLabel());
     }
 
     /**
@@ -196,7 +148,7 @@ class EPS extends Domestic
         $pageId = $this->pdf->importPage(1);
         $sizes = $this->pdf->getTemplateSize($pageId);
 
-        if (isset($sizes['width']) && isset($sizes['height']) && $sizes['width'] > $sizes['height']) {
+        if (isset($sizes['width'], $sizes['height']) && $sizes['width'] > $sizes['height']) {
             return true;
         }
 

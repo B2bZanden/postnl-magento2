@@ -1,36 +1,8 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Webservices\Endpoints;
 
+use TIG\PostNL\Config\Provider\PrintSettingsConfiguration;
 use TIG\PostNL\Model\Shipment;
 use TIG\PostNL\Api\Data\ShipmentInterface;
 use TIG\PostNL\Webservices\Parser\Label\Shipments as ShipmentData;
@@ -56,6 +28,7 @@ class Labelling extends AbstractEndpoint
      * @var Message
      */
     private $message;
+    private PrintSettingsConfiguration $printConfiguration;
 
     /**
      * @var string
@@ -67,10 +40,7 @@ class Labelling extends AbstractEndpoint
      */
     private $endpoint = 'label';
 
-    /**
-     * @var array
-     */
-    private $requestParams;
+    protected array $requestParams;
 
     /**
      * Labelling constructor.
@@ -79,16 +49,19 @@ class Labelling extends AbstractEndpoint
      * @param \TIG\PostNL\Webservices\Parser\Label\Customer  $customer
      * @param \TIG\PostNL\Webservices\Api\Message            $message
      * @param \TIG\PostNL\Webservices\Parser\Label\Shipments $shipmentData
+     * @param PrintSettingsConfiguration                     $printConfiguration
      */
     public function __construct(
         Soap $soap,
         Customer $customer,
         Message $message,
-        ShipmentData $shipmentData
+        ShipmentData $shipmentData,
+        PrintSettingsConfiguration $printConfiguration
     ) {
         $this->soap     = $soap;
         $this->customer = $customer;
         $this->message  = $message;
+        $this->printConfiguration = $printConfiguration;
 
         parent::__construct(
             $shipmentData
@@ -116,12 +89,12 @@ class Labelling extends AbstractEndpoint
         $this->customer->changeCustomerStoreId($storeId);
 
         $barcode     = $shipment->getMainBarcode();
-        $printerType = ['Printertype' => 'GraphicFile|PDF'];
+        $printerType = ['Printertype' => $this->printConfiguration->getPrinterType($shipment)];
         $message     = $this->message->get($barcode, $printerType);
 
         $this->requestParams = [
             'Message'   => $message,
-            'Customer'  => $this->customer->get(),
+            'Customer'  => $this->customer->get($shipment),
             'Shipments' => $this->getShipments($shipment, $currentShipmentNumber),
         ];
     }
