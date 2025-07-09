@@ -1,37 +1,9 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Test\Unit\Service\Carrier;
 
-use Magento\Checkout\Model\Session\Proxy as Session;
+use Magento\Checkout\Model\Session;
+use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Quote\Model\Quote;
 use Magento\Quote\Model\Quote\Address;
 use Magento\Quote\Model\Quote\Address\RateRequest;
@@ -50,7 +22,7 @@ class QuoteToRateRequestTest extends TestCase
         $storeMock->expects($this->once())->method('getWebsiteId')->willReturn(1);
 
         $addressMock = $this->getFakeMock(Address::class)
-            ->setMethods(['getStreetFull', 'getPostcode', 'getCity', 'getCountryId', 'getRegionId', 'getFreeShipping'])
+            ->setMethods(['getStreetFull', 'getPostcode', 'getCity', 'getCountryId', 'getRegionId', 'getFreeShipping', 'getSubtotal'])
             ->getMock();
         $addressMock->expects($this->once())->method('getStreetFull')->willReturn('Kabelweg 37');
         $addressMock->expects($this->once())->method('getPostcode')->willReturn('1014 BA');
@@ -58,17 +30,21 @@ class QuoteToRateRequestTest extends TestCase
         $addressMock->expects($this->once())->method('getCountryId')->willReturn('NL');
         $addressMock->expects($this->once())->method('getRegionId')->willReturn(null);
         $addressMock->expects($this->once())->method('getFreeShipping')->willReturn('1');
+        $addressMock->method('getSubtotal')->willReturn(10);
 
         $quoteMock = $this->getFakeMock(Quote::class)
             ->setMethods(['getStore', 'getShippingAddress', 'getAllItems', 'getSubtotal'])
             ->getMock();
         $quoteMock->expects($this->once())->method('getStore')->willReturn($storeMock);
-        $quoteMock->expects($this->once())->method('getShippingAddress')->willReturn($addressMock);
+        $quoteMock->method('getShippingAddress')->willReturn($addressMock);
         $quoteMock->expects($this->exactly(3))->method('getAllItems')->willReturn([]);
-        $quoteMock->expects($this->once())->method('getSubtotal')->willReturn(10);
+        $quoteMock->method('getSubtotal')->willReturn(10);
 
         $checkoutSessionMock = $this->getFakeMock(Session::class)->setMethods(['getQuote'])->getMock();
         $checkoutSessionMock->expects($this->once())->method('getQuote')->willReturn($quoteMock);
+
+        $scopeConfigMock = $this->getFakeMock(ScopeConfigInterface::class)->getMock();
+        $scopeConfigMock->expects($this->once())->method('getValue')->willReturn(false);
 
         $rateRequestMock = $this->getFakeMock(RateRequest::class)->setMethods(null)->getMock();
 
@@ -77,7 +53,8 @@ class QuoteToRateRequestTest extends TestCase
 
         $instance = $this->getInstance([
             'session' => $checkoutSessionMock,
-            'rateRequestFactory' => $rateRequestFactoryMock
+            'rateRequestFactory' => $rateRequestFactoryMock,
+            'scopeConfig' => $scopeConfigMock
         ]);
 
         $result = $instance->get();

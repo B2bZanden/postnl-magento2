@@ -1,35 +1,5 @@
 <?php
 
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@totalinternetgroup.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 namespace TIG\PostNL\Service\Converter;
 
 use Magento\Quote\Model\Quote\Address as QuoteAddress;
@@ -55,23 +25,23 @@ class CanaryIslandToIC
      * POSTNLM2-504 - Canary islands, Melilla and Ceuta should be considered Globalpack
      * https://developer.postnl.nl/browse-apis/send-and-track/products/#destination-EU
      *
-     * @param SalesAddress|QuoteAddress $address
+     * @param SalesAddress|QuoteAddress|array $address
      *
      * @return bool
      */
-    public function isCanaryIsland($address)
+    public function isCanaryIsland($address): bool
     {
         $canaryIslands = [35, 38, 51, 52];
 
         // Check if the function is called from SetDefaultData as an object
         if (is_object($address) && $address->getCountryId() === 'ES' &&
-            in_array(substr($address->getPostcode(), 0, 2), $canaryIslands)) {
+            in_array((int)substr($address->getPostcode(), 0, 2), $canaryIslands, true)) {
             return true;
         }
 
         // Check if the address is called from Save as an array
         if (is_array($address) && $address['country'] === 'ES' &&
-            in_array(substr($address['postcode'], 0, 2), $canaryIslands)) {
+            in_array((int)substr($address['postcode'], 0, 2), $canaryIslands, true)) {
             return true;
         }
 

@@ -1,61 +1,28 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Webservices\Api;
 
+use TIG\PostNL\Api\Data\ShipmentInterface;
 use TIG\PostNL\Config\Provider\AccountConfiguration;
 use TIG\PostNL\Config\Provider\AddressConfiguration;
 use TIG\PostNL\Config\Provider\ReturnOptions;
+use TIG\PostNL\Exception;
+use TIG\PostNL\Service\Shipment\ErsCountries;
 
 class Customer
 {
+    const ADDRESS_TYPE_RECEIVER = '01';
     const ADDRESS_TYPE_SENDER = '02';
+    const ADDRESS_TYPE_RETURN = '08';
 
-    /**
-     * @var AccountConfiguration
-     */
-    private $accountConfiguration;
+    private AccountConfiguration $accountConfiguration;
 
-    /**
-     * @var AddressConfiguration
-     */
-    private $addressConfiguration;
+    private AddressConfiguration $addressConfiguration;
 
-    /**
-     * @var null|int
-     */
-    private $storeId = null;
+    private ReturnOptions $returnOptions;
 
-    /** @var ReturnOptions  */
-    private $returnOptions;
+    private ?int $storeId = null;
+
 
     /**
      * @param AccountConfiguration $accountConfiguration
@@ -73,12 +40,9 @@ class Customer
     }
 
     /**
-     * @param      $shipment
-     * @param bool $isReturnBarcode
-     *
-     * @return array
+     * @throws Exception
      */
-    public function get($shipment = false, $isReturnBarcode = false)
+    public function get(ShipmentInterface $shipment = null, bool $isReturnBarcode = false): array
     {
         $customer = [
             'CustomerCode'   => $isReturnBarcode ? $this->getReturnCustomerCode($shipment) :
@@ -97,10 +61,7 @@ class Customer
         return $this->accountConfiguration->getBlsCode($this->storeId);
     }
 
-    /**
-     * @return array
-     */
-    public function address()
+    public function address(): array
     {
         $addressArray = [
             'AddressType' => self::ADDRESS_TYPE_SENDER,
@@ -119,25 +80,61 @@ class Customer
         return $addressArray;
     }
 
-    /**
-     * @param $storeId
-     */
-    public function changeStoreId($storeId)
+    public function returnAddress(): array
+    {
+        return [
+            'AddressType' => self::ADDRESS_TYPE_RECEIVER,
+            'FirstName'   => $this->addressConfiguration->getFirstname($this->storeId),
+            'Name'        => $this->addressConfiguration->getLastname($this->storeId),
+            'CompanyName' => $this->returnOptions->getCompany(),
+            'Street'      => $this->returnOptions->getStreetname(),
+            'HouseNr'     => $this->returnOptions->getHousenumber(),
+            'HouseNrExt'  => $this->returnOptions->getHouseNumberEx(),
+            'Zipcode'     => $this->getFormattedReturnZipCode($this->returnOptions->getZipcode()),
+            'City'        => $this->returnOptions->getCity(),
+            'Countrycode' => $this->addressConfiguration->getCountry(),
+            'Department'  => '',
+        ];
+    }
+
+    public function getFreepostAddress(): array
+    {
+        return [
+            'AddressType' => self::ADDRESS_TYPE_RETURN,
+            'City' => $this->returnOptions->getCity(),
+            'Countrycode' => $this->addressConfiguration->getCountry(),
+            'HouseNr' => $this->returnOptions->getFreepostNumber(),
+            'Street' => 'Antwoordnummer',
+            'Zipcode' => $this->getFormattedReturnZipCode($this->returnOptions->getZipcode()),
+            'CompanyName' => $this->returnOptions->getCompany(),
+        ];
+    }
+
+    public function changeStoreId(int $storeId): void
     {
         $this->storeId = $storeId;
     }
 
+    public function getFormattedReturnZipCode($zipcode): string
+    {
+        return strtoupper(str_replace(' ', '', (string)$zipcode));
+    }
+
     /**
-     * @param $shipment
+     * @param ShipmentInterface $shipment
      *
-     * @return integer
+     * @return string
      * @throws \TIG\PostNL\Exception
      */
-    public function getReturnCustomerCode($shipment)
+    public function getReturnCustomerCode(ShipmentInterface $shipment)
     {
         $shippingAddress = $shipment->getShippingAddress();
 
         if (in_array($shippingAddress->getCountryId(), ['NL', 'BE'])) {
+            return $this->returnOptions->getCustomerCode();
+        }
+
+        if ($shipment->getShortProductCode() === '4907' && ErsCountries::isIncluded($shippingAddress->getCountryId())) {
             return $this->returnOptions->getCustomerCode();
         }
 

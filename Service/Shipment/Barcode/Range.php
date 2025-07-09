@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipment\Barcode;
 
 use TIG\PostNL\Config\Provider\AccountConfiguration;
@@ -48,6 +19,7 @@ class Range
     const NL_BARCODE_SERIE_SHORT  = '000000000-999999999';
     const EU_BARCODE_SERIE_LONG   = '00000000-99999999';
     const EU_BARCODE_SERIE_SHORT  = '0000000-9999999';
+    const EU_BARCODE_SERIE_ERS    = '000000-999999';
     const GLOBAL_BARCODE_SERIE    = '0000-9999';
 
     /**
@@ -69,6 +41,11 @@ class Range
      * @var int
      */
     private $storeId;
+
+    /**
+     * @var int|string
+     */
+    private $productCode;
 
     /**
      * @var array
@@ -124,19 +101,23 @@ class Range
     public function getByProductCode($productCode, $storeId = null)
     {
         $this->storeId = $storeId;
+        $this->productCode = $productCode;
 
         if ($this->options->doesProductMatchFlags($productCode, 'group', 'global_options')) {
             return $this->get('GLOBAL');
         }
 
         if ($this->options->doesProductMatchFlags($productCode, 'group', 'eu_options') ||
+            $this->options->doesProductMatchFlags($productCode, 'group', 'eps_package_options') ||
             $this->options->doesProductMatchFlags($productCode, 'group', 'be_options') ||
             $this->options->doesProductMatchFlags($productCode, 'group', 'pakjegemak_be_options')
         ) {
             return $this->get('EU');
         }
 
-        if ($this->options->doesProductMatchFlags($productCode, 'group', 'priority_options')) {
+        if ($this->options->doesProductMatchFlags($productCode, 'group', 'priority_options') ||
+            $this->options->doesProductMatchFlags($productCode, 'group', 'boxable_packets')
+        ) {
             return $this->get('PEPS');
         }
 
@@ -195,7 +176,7 @@ class Range
 
     private function updatePepsOptions()
     {
-        $this->response['type']  = $this->pepsConfiguration->getBarcodeType();
+        $this->response['type']  = $this->pepsConfiguration->getBarcodeType($this->productCode);
         $this->response['range'] = $this->pepsConfiguration->getBarcodeRange();
         $this->response['serie'] = static::EU_BARCODE_SERIE_LONG;
     }

@@ -1,45 +1,16 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipment\Label;
 
-use TIG\PostNL\Config\Provider\Webshop;
+use TIG\PostNL\Config\Provider\PrintSettingsConfiguration;
 use TIG\PostNL\Service\Pdf\Fpdi;
 
 class Merge
 {
     /**
-     * @var Webshop
+     * @var PrintSettingsConfiguration
      */
-    private $webshop;
+    private $printSettings;
 
     /**
      * @var Merge\A4Merger
@@ -52,17 +23,16 @@ class Merge
     private $a6Merger;
 
     /**
-     * @param Webshop        $webshopConfiguration
+     * @param PrintSettingsConfiguration $printSettings
      * @param Merge\A4Merger $a4Merger
      * @param Merge\A6Merger $a6Merger
-     * @param File           $file
      */
     public function __construct(
-        Webshop $webshopConfiguration,
+        PrintSettingsConfiguration $printSettings,
         Merge\A4Merger $a4Merger,
         Merge\A6Merger $a6Merger
     ) {
-        $this->webshop = $webshopConfiguration;
+        $this->printSettings = $printSettings;
         $this->a4Merger = $a4Merger;
         $this->a6Merger = $a6Merger;
     }
@@ -83,13 +53,13 @@ class Merge
     public function files(array $labels, $createNewPdf = false)
     {
         $output = '';
-        if ($this->webshop->getLabelSize() == 'A4' || $createNewPdf) {
+        if ($this->printSettings->getLabelSize() == 'A4' || $createNewPdf) {
             $result = $this->a4Merger->files($labels, $createNewPdf);
             $output = $result->Output('s');
         }
 
         //  Create PDF is used for packingslips which are always A4.
-        if ($this->webshop->getLabelSize() == 'A6' && !$createNewPdf) {
+        if ($this->printSettings->getLabelSize() == 'A6' && !$createNewPdf) {
             $result = $this->mergeA6Labels($labels, $createNewPdf);
             $output = $result->Output('s');
         }
@@ -131,7 +101,7 @@ class Merge
     private function getGPlabels($labels)
     {
         return array_filter($labels, function ($label) {
-            return $label->shipmentType == 'GP';
+            return $label->shipmentType == 'GP' || (isset($label->labelFormat) && $label->labelFormat === 'A4');
         });
     }
 
@@ -143,7 +113,7 @@ class Merge
     private function getNonGPlabels($labels)
     {
         return array_filter($labels, function ($label) {
-            return $label->shipmentType != 'GP';
+            return $label->shipmentType != 'GP' && empty($label->labelFormat);
         });
     }
 }

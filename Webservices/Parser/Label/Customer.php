@@ -1,70 +1,50 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Webservices\Parser\Label;
 
+use TIG\PostNL\Api\Data\ShipmentInterface;
+use TIG\PostNL\Config\Provider\ReturnOptions;
+use TIG\PostNL\Config\Source\Settings\ReturnTypes;
 use TIG\PostNL\Webservices\Api\Customer as CustomerApi;
 
 class Customer
 {
-    /**
-     * @var CustomerApi
-     */
-    private $customer;
+    private CustomerApi $customer;
+    private ReturnOptions $returnOptions;
 
-    /**
-     * @param CustomerApi $customer
-     */
     public function __construct(
-        CustomerApi $customer
+        CustomerApi $customer,
+        ReturnOptions $returnOptions
     ) {
         $this->customer = $customer;
+        $this->returnOptions = $returnOptions;
     }
 
     /**
-     * @return array
+     * @throws \TIG\PostNL\Exception
      */
-    public function get()
+    public function get(ShipmentInterface $shipment): array
     {
         $customer                       = $this->customer->get();
         $customer['Address']            = $this->customer->address();
+        if ($shipment->getIsSmartReturn()) {
+            $returnType = $this->returnOptions->getReturnTo();
+            $countryCode = $this->returnOptions->getGeneralCountry();
+            // For Freepost we have another address that should be set
+            if ($returnType === ReturnTypes::TYPE_FREE_POST && $countryCode === 'NL') {
+                $customer['Address'] = $this->customer->getFreepostAddress();
+            } else {
+                $customer['Address'] = $this->customer->returnAddress();
+            }
+            // Replace Type as return address
+            $customer['Address']['AddressType'] = CustomerApi::ADDRESS_TYPE_RECEIVER;
+        }
         $customer['CollectionLocation'] = $this->customer->blsCode();
 
         return $customer;
     }
 
-    /**
-     * @param $storeId
-     */
-    public function changeCustomerStoreId($storeId)
+    public function changeCustomerStoreId(int $storeId): void
     {
         $this->customer->changeStoreId($storeId);
     }

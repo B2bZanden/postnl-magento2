@@ -1,48 +1,12 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Model\Mail\Template;
 
-use Laminas\Mime\Message as MimeMessage;
-use Laminas\Mime\Mime;
-use Laminas\Mime\Part;
 use Magento\Framework\Mail\MessageInterface;
 
 class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
 {
-    /**
-     * @var array
-     */
-    private $parts = [];
+    private array $parts = [];
 
     /**
      * @return $this|TransportBuilder
@@ -52,11 +16,8 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
     {
         parent::prepareMessage();
 
-        $mimeMessage = $this->getMimeMessage($this->message);
-
-        if ($this->parts instanceof Part) {
-            $mimeMessage->addPart($this->parts);
-            $this->message->setBody($mimeMessage);
+        if (!empty($this->parts)) {
+            $this->attachFile($this->message);
         }
 
         return $this;
@@ -65,20 +26,20 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
     /**
      * @param        $body
      * @param string $mimeType
-     * @param string $disposition
-     * @param string $encoding
      * @param $filename
      *
      * @return $this
      */
     public function addAttachment(
         $body,
-        string $mimeType    = Mime::TYPE_OCTETSTREAM,
-        string $disposition = Mime::DISPOSITION_ATTACHMENT,
-        string $encoding    = Mime::ENCODING_BASE64,
+        string $mimeType    = 'application/octet-stream',
         $filename           = null
     ) {
-        $this->parts = $this->createMimePart($body, $mimeType, $disposition, $encoding, $filename);
+        $this->parts[] = [
+            'body' => $body,
+            'mime' => $mimeType,
+            'name' => $filename
+        ];
         return $this;
     }
 
@@ -89,16 +50,16 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
      * @param string $encoding
      * @param $filename
      *
-     * @return Part
+     * @return \Laminas\Mime\Part
      */
     private function createMimePart(
         $content,
-        string $type        = Mime::TYPE_OCTETSTREAM,
-        string $disposition = Mime::DISPOSITION_ATTACHMENT,
-        string $encoding    = Mime::ENCODING_BASE64,
+        string $type        = \Laminas\Mime\Mime::TYPE_OCTETSTREAM,
+        string $disposition = \Laminas\Mime\Mime::DISPOSITION_ATTACHMENT,
+        string $encoding    = \Laminas\Mime\Mime::ENCODING_BASE64,
         $filename           = null
     ) {
-        $mimePart = new Part($content);
+        $mimePart = new \Laminas\Mime\Part($content);
         $mimePart->setType($type);
         $mimePart->setDisposition($disposition);
         $mimePart->setEncoding($encoding);
@@ -112,24 +73,45 @@ class TransportBuilder extends \Magento\Framework\Mail\Template\TransportBuilder
 
     /**
      * @param MessageInterface $message
-     *
-     * @return MimeMessage
      */
-    private function getMimeMessage(MessageInterface $message)
+    private function attachFile(MessageInterface $message): void
     {
-        $body = $message->getBody();
-
-        if ($body instanceof MimeMessage) {
-            return $body;
+        // Magento 2.4.8+ support - using Symfony classes, laminas removed as deprecated
+        if (method_exists($message, 'getSymfonyMessage')) {
+            /** @var \Symfony\Component\Mime\Message $symfonyMessage */
+            $symfonyMessage = $message->getSymfonyMessage();
+            $part = $symfonyMessage->getBody();
+            $attachments = [];
+            foreach ($this->parts as $partData) {
+                $attachments[] = new \Symfony\Component\Mime\Part\DataPart($partData['body'], $partData['name'], $partData['mime']);
+            }
+            $part = new \Symfony\Component\Mime\Part\Multipart\MixedPart($part, ...$attachments);
+            $symfonyMessage->setBody($part);
+            return;
         }
 
-        $mimeMessage = new MimeMessage();
+        // Magento 2.4.8- support - laminas messages
+        if (class_exists('Laminas\Mime\Message')) {
+            $mimeMessage = $message->getBody();
+            if (!$mimeMessage instanceof \Laminas\Mime\Message) {
+                $body = $mimeMessage;
+                $mimeMessage = new \Laminas\Mime\Message();
 
-        if ($body) {
-            $mimePart = $this->createMimePart((string)$body, Mime::TYPE_TEXT, Mime::DISPOSITION_INLINE);
-            $mimeMessage->setParts([$mimePart]);
+                if ($body) {
+                    $mimePart = $this->createMimePart(
+                        (string)$body,
+                        \Laminas\Mime\Mime::TYPE_TEXT,
+                        \Laminas\Mime\Mime::DISPOSITION_INLINE
+                    );
+                    $mimeMessage->setParts([$mimePart]);
+                }
+            }
+            foreach ($this->parts as $partData) {
+                $part = $this->createMimePart($partData['body'], $partData['mime'], 'attachment', 'base64', $partData['name']);
+                $mimeMessage->addPart($part);
+            }
+            $this->message->setBody($mimeMessage);
         }
 
-        return $mimeMessage;
     }
 }

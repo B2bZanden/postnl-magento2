@@ -1,42 +1,16 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Webservices;
 
+use Laminas\Http\Client as HttpClient;
+use Laminas\Http\Client\Exception\RuntimeException;
+use Laminas\Http\Request;
 use Magento\Framework\Exception\LocalizedException;
 use TIG\PostNL\Config\Provider\AccountConfiguration;
 use TIG\PostNL\Config\Provider\DefaultConfiguration;
-use Magento\Framework\HTTP\ZendClient as ZendClient;
-use TIG\PostNL\Webservices\Endpoints\Address\RestInterface;
-use TIG\PostNL\Service\Handler\PostcodecheckHandler;
+use TIG\PostNL\Service\Module\Version;
+use TIG\PostNL\Webservices\Api\RestLog;
+use TIG\PostNL\Webservices\Endpoints\RestInterface;
 
 class Rest
 {
@@ -46,9 +20,9 @@ class Rest
     private $apiKey = null;
 
     /**
-     * @var ZendClient
+     * @var HttpClient
      */
-    private $zendClient;
+    private $httpClient;
 
     /**
      * @var AccountConfiguration
@@ -59,65 +33,85 @@ class Rest
      * @var DefaultConfiguration
      */
     private $defaultConfiguration;
-
-    /**
-     * @var PostcodecheckHandler
-     */
-    private $handler;
+    private RestLog $log;
+    private Version $versionService;
 
     /**
      * Rest constructor.
      *
-     * @param ZendClient           $zendClient
+     * @param HttpClient           $httpClient
      * @param AccountConfiguration $accountConfiguration
      * @param DefaultConfiguration $defaultConfiguration
-     * @param PostcodecheckHandler $postcodecheckHandler
      */
     public function __construct(
-        ZendClient $zendClient,
+        HttpClient $httpClient,
         AccountConfiguration $accountConfiguration,
         DefaultConfiguration $defaultConfiguration,
-        PostcodecheckHandler $postcodecheckHandler
+        RestLog $log,
+        Version $versionService
     ) {
-        $this->zendClient           = $zendClient;
+        $this->httpClient           = $httpClient;
         $this->accountConfiguration = $accountConfiguration;
         $this->defaultConfiguration = $defaultConfiguration;
-        $this->handler              = $postcodecheckHandler;
+        $this->log = $log;
+        $this->versionService = $versionService;
     }
 
     /**
      * @param RestInterface $endpoint
      *
-     * @return array|\Zend_Http_Response
+     * @return array|string
      */
     public function getRequest(RestInterface $endpoint)
     {
-        $this->zendClient->resetParameters();
+        $this->httpClient->resetParameters();
         $this->addUri($endpoint);
-        $this->addApiKeyToHeaders();
+        $this->addHeaders();
         $this->addParameters($endpoint);
 
         try {
-            $response = $this->zendClient->request();
-            $response = $this->handler->convertResponse($response->getBody());
-        } catch (\Zend_Http_Client_Exception $exception) {
+            $responseBody = $this->httpClient->send();
+            $response = $responseBody->getBody();
+        } catch (RuntimeException $exception) {
             $response = [
                 'status' => 'error',
                 'error'  => __('Address API exception : %1', $exception->getCode())
             ];
+        } finally {
+            $this->log->request($endpoint, $responseBody);
         }
 
         return $response;
     }
 
+    public function callRequest(RestInterface $endpoint): array
+    {
+        $result = $this->getRequest($endpoint);
+        if (is_string($result)) {
+            try {
+                $result = \json_decode($result, true, 50, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                $result = [
+                    'status' => 'error',
+                    'error'  => __('Unable to extract API response.')
+                ];
+            }
+        }
+        return $result;
+    }
+
     /**
      * Includes the API key into the headers.
      */
-    private function addApiKeyToHeaders()
+    private function addHeaders()
     {
-        $this->zendClient->setHeaders([
-            'apikey' => $this->getApiKey()
-        ]);
+        $headers = [
+            'apikey: ' . $this->getApiKey(),
+            'SourceSystem: 66',
+            'Content-Type: application/json',
+            ... $this->versionService->getCachedVersions()
+        ];
+        $this->httpClient->setHeaders($headers);
     }
 
     /**
@@ -126,15 +120,15 @@ class Rest
     private function addParameters(RestInterface $endpoint)
     {
         $params = $endpoint->getRequestData();
-        if ($endpoint->getMethod() == ZendClient::GET) {
-            $this->zendClient->setParameterGet($params);
+        if ($endpoint->getMethod() == Request::METHOD_GET) {
+            $this->httpClient->setParameterGet($params);
         }
 
-        if ($endpoint->getMethod() == ZendClient::POST) {
-            $this->zendClient->setRawData(json_encode($params), 'application/json');
+        if ($endpoint->getMethod() == Request::METHOD_POST) {
+            $this->httpClient->setRawBody(json_encode($params));
         }
 
-        $this->zendClient->setMethod($endpoint->getMethod());
+        $this->httpClient->setMethod($endpoint->getMethod());
     }
 
     /**
@@ -160,8 +154,9 @@ class Rest
      */
     private function addUri(RestInterface $endpoint)
     {
-        $url = $this->defaultConfiguration->getModusAddressApiUrl() . $endpoint->getVersion() .'/';
-        $uri = $url . $endpoint->getEndpoint();
-        $this->zendClient->setUri($uri);
+        $url = $this->defaultConfiguration->getModusApiUrl();
+
+        $uri = $url . $endpoint->getResource() . $endpoint->getVersion() . '/' . $endpoint->getEndpoint();
+        $this->httpClient->setUri($uri);
     }
 }

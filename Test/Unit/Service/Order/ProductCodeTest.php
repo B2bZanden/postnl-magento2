@@ -1,34 +1,5 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Test\Unit\Service\Order;
 
 use Magento\Quote\Model\Quote;
@@ -54,7 +25,6 @@ class ProductCodeTest extends TestCase
     const PRODUCT_OPTION_PAKJEGEMAK = 'pakjegemak_product_option';
     const PRODUCT_OPTION_PAKJEGEMAK_BE = 'pakjegemak_be_product_option';
     const PRODUCT_OPTION_PAKJEGEMAK_BE_DOMESTIC = 'pakjegemak_be_domestic_product_option';
-    const PRODUCT_OPTION_SUNDAY = 'sunday_product_option';
     const PRODUCT_OPTION_LETTERBOX_PACKAGE = '2928';
 
     /**
@@ -86,11 +56,6 @@ class ProductCodeTest extends TestCase
         $this->addProductOptionsMockFunction('getDefaultLetterBoxPackageProductOption', static::PRODUCT_OPTION_LETTERBOX_PACKAGE);
         $this->addProductOptionsMockFunction('getDefaultPakjeGemakBeProductOption', static::PRODUCT_OPTION_PAKJEGEMAK_BE);
         $this->addProductOptionsMockFunction('getDefaultPakjeGemakBeDomesticProductOption', static::PRODUCT_OPTION_PAKJEGEMAK_BE_DOMESTIC);
-        $this->addProductOptionsMockFunction('getDefaultSundayProductOption', static::PRODUCT_OPTION_SUNDAY);
-        $this->addProductOptionsMockFunction(
-            'getAlternativeDefaultProductOption',
-            static::PRODUCT_OPTION_ALTERNATIVE_DEFAULT
-        );
     }
 
     /**
@@ -124,7 +89,6 @@ class ProductCodeTest extends TestCase
             'default' => ['delivery', 'default', 'NL', 'NL', static::PRODUCT_OPTION_DEFAULT, 'Daytime'],
             'evening' => ['delivery', 'evening', 'NL', 'NL', static::PRODUCT_OPTION_EVENING, 'Evening'],
             'extra at home' => ['delivery', 'extra@home', 'NL', 'NL', static::PRODUCT_OPTION_EXTRAATHOME, 'Extra@Home'],
-            'sunday' => ['delivery', 'sunday', 'NL', 'NL', static::PRODUCT_OPTION_SUNDAY, 'Sunday'],
             'default pg' => ['pickup', 'default', 'NL', 'NL', static::PRODUCT_OPTION_PAKJEGEMAK, 'PG'],
             'pakjegemak' => ['pickup', '', 'NL', 'NL', static::PRODUCT_OPTION_PAKJEGEMAK, 'PG'],
             'letterbox package' => ['delivery', 'letterbox_package', 'NL', 'NL', static::PRODUCT_OPTION_LETTERBOX_PACKAGE, 'Letterbox Package'],
@@ -175,28 +139,16 @@ class ProductCodeTest extends TestCase
     {
         return [
             'alternative disabled' => [
-                0,
+                false,
                 5,
                 10,
                 static::PRODUCT_OPTION_DEFAULT
             ],
             'alternative enabled, amount limit not exceeded' => [
-                1,
+                true,
                 20,
                 15,
                 static::PRODUCT_OPTION_DEFAULT
-            ],
-            'alternative enabled, amount limit exceeded' => [
-                1,
-                25,
-                30,
-                static::PRODUCT_OPTION_ALTERNATIVE_DEFAULT
-            ],
-            'alternative enabled, amount limit equals quote total' => [
-                1,
-                40,
-                40,
-                static::PRODUCT_OPTION_ALTERNATIVE_DEFAULT
             ]
         ];
     }
@@ -216,7 +168,6 @@ class ProductCodeTest extends TestCase
 
         $this->quoteInterfaceMock->method('getQuote')->willReturn($quoteMock);
         $this->productOptionsMock->method('getUseAlternativeDefault')->willReturn($useAlternative);
-        $this->productOptionsMock->method('getAlternativeDefaultMinAmount')->willReturn($alternativeMinAmount);
 
         $instance = $this->getInstance();
         $this->invokeArgs('setDefaultProductOption', ['country' => 'NL'], $instance);

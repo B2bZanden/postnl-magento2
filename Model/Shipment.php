@@ -1,34 +1,4 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 
 namespace TIG\PostNL\Model;
 
@@ -37,6 +7,7 @@ use Magento\Framework\Data\Collection\AbstractDb;
 use Magento\Framework\Model\Context;
 use Magento\Framework\Model\ResourceModel\AbstractResource;
 use Magento\Framework\Registry;
+use Magento\Framework\Serialize\SerializerInterface;
 use Magento\Framework\Stdlib\DateTime\DateTime;
 use Magento\Framework\Stdlib\DateTime\TimezoneInterface;
 use Magento\Sales\Model\Order\Address;
@@ -63,6 +34,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
     const FIELD_SHIPMENT_COUNTRY        = 'shipment_country';
     const FIELD_AC_CHARACTERISTIC       = 'ac_characteristic';
     const FIELD_AC_OPTION               = 'ac_option';
+    const FIELD_AC_INFORMATION          = 'ac_information';
     const FIELD_DELIVERY_DATE           = 'delivery_date';
     const FIELD_IS_PAKJEGEMAK           = 'is_pakjegemak';
     const FIELD_PG_LOCATION_CODE        = 'pg_location_code';
@@ -78,6 +50,8 @@ class Shipment extends AbstractModel implements ShipmentInterface
     const FIELD_IS_SMART_RETURN         = 'is_smart_return';
     const FIELD_SMART_RETURN_BARCODE    = 'smart_return_barcode';
     const FIELD_SMART_RETURN_EMAIL_SENT = 'smart_return_email_sent';
+    const FIELD_INSURED_TIER            = 'insured_tier';
+    const FIELD_RETURN_STATUS           = 'return_status';
 
     /**
      * @var string
@@ -129,6 +103,9 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     private $customs;
 
+    /** @var SerializerInterface */
+    private $serializer;
+
     /**
      * @param Context                            $context
      * @param Registry                           $registry
@@ -141,8 +118,9 @@ class Shipment extends AbstractModel implements ShipmentInterface
      * @param ShipmentBarcodeRepositoryInterface $barcodeRepository
      * @param ProductRepositoryInterface         $productRepository
      * @param Customs                            $customs
-     * @param AbstractResource                   $resource
-     * @param AbstractDb                         $resourceCollection
+     * @param SerializerInterface                $serializer
+     * @param AbstractResource|null              $resource
+     * @param AbstractDb|null                    $resourceCollection
      * @param array                              $data
      */
     public function __construct(
@@ -157,6 +135,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
         ShipmentBarcodeRepositoryInterface $barcodeRepository,
         ProductRepositoryInterface         $productRepository,
         Customs                            $customs,
+        SerializerInterface                $serializer,
         AbstractResource                   $resource = null,
         AbstractDb                         $resourceCollection = null,
         array $data = []
@@ -171,6 +150,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
         $this->barcodeRepository       = $barcodeRepository;
         $this->productRepository       = $productRepository;
         $this->customs                 = $customs;
+        $this->serializer              = $serializer;
     }
 
     /**
@@ -282,7 +262,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
     }
 
     /**
-     * @return float|int
+     * @return float
      */
     public function getTotalWeight()
     {
@@ -293,24 +273,12 @@ class Shipment extends AbstractModel implements ShipmentInterface
         foreach ($items as $item) {
             $itemWeight = $item->getWeight() * $item->getQty();
 
-            if ($itemWeight < 1) {
-                $weight += 1;
-                continue;
-            }
-
             $weight += $itemWeight;
         }
 
         if ($this->customs->getWeightUnit() == 'lbs') {
             //convert Kgs to Lb
             $weight = $weight / 2.20462262;
-            $weight = $weight > 1 ? $weight : 1;
-
-            return $weight;
-        }
-
-        if ($weight < 1) {
-            $weight = 1;
         }
 
         return $weight;
@@ -389,6 +357,9 @@ class Shipment extends AbstractModel implements ShipmentInterface
     public function getBarcode($currentShipmentNumber = 1)
     {
         if ($currentShipmentNumber == 1) {
+            if ($this->getIsSmartReturn()) {
+                return $this->getSmartReturnBarcode();
+            }
             return $this->getMainBarcode();
         }
 
@@ -441,6 +412,13 @@ class Shipment extends AbstractModel implements ShipmentInterface
     public function getProductCode()
     {
         return $this->getData(static::FIELD_PRODUCT_CODE);
+    }
+
+    public function getShortProductCode(): string
+    {
+        $productCode = (string)$this->getProductCode();
+        if (strlen($productCode) > 4) $productCode = substr($productCode, 1);
+        return $productCode;
     }
 
     /**
@@ -513,6 +491,39 @@ class Shipment extends AbstractModel implements ShipmentInterface
     public function getAcOption()
     {
         return $this->getData(static::FIELD_AC_OPTION);
+    }
+
+    /**
+     * @param $value
+     *
+     * @return $this
+     */
+    public function setAcInformation($value)
+    {
+        //empty arrays shouldn't be serialized or used, so set those to null
+        if (is_array($value) && empty($value)) {
+            $value = null;
+        }
+
+        if (!empty($value)) {
+            $value = $this->serializer->serialize($value);
+        }
+
+        return $this->setData(static::FIELD_AC_INFORMATION, $value);
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getAcInformation()
+    {
+        $value = $this->getData(static::FIELD_AC_INFORMATION);
+
+        if (!empty($value)) {
+            $value = $this->serializer->unserialize($value);
+        }
+
+        return $value;
     }
 
     /**
@@ -711,6 +722,16 @@ class Shipment extends AbstractModel implements ShipmentInterface
         return $this->getData(static::FIELD_DOWNPARTNER_BARCODE);
     }
 
+    public function isOptionFlagSet(string $key): bool
+    {
+        $productCodeOptions = $this->getProductCodeOptions();
+
+        if ($productCodeOptions === null) {
+            return false;
+        }
+        return (bool)($productCodeOptions[$key] ?? false);
+    }
+
     /**
      * Check if this shipment must be sent using Extra Cover.
      *
@@ -718,17 +739,28 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     public function isExtraCover()
     {
+        return $this->isOptionFlagSet('isExtraCover');
+    }
+
+    /**
+     * Check if this shipment contains code at door options.
+     *
+     * @return bool
+     */
+    public function isCodeAtDoor(): bool
+    {
+        return $this->isOptionFlagSet('isCodeAtCode');
+    }
+
+    protected function compareProductCodeToGroup(string $group): bool
+    {
         $productCodeOptions = $this->getProductCodeOptions();
 
         if ($productCodeOptions === null) {
             return false;
         }
 
-        if (!array_key_exists('isExtraCover', $productCodeOptions)) {
-            return false;
-        }
-
-        return $productCodeOptions['isExtraCover'];
+        return $productCodeOptions['group'] === $group;
     }
 
     /**
@@ -736,21 +768,27 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     public function isGlobalPack()
     {
-        return $this->getShipmentType() == 'GP';
+        return $this->compareProductCodeToGroup('global_options');
     }
 
-    /**
-     * @return bool
-     */
-    public function isExtraAtHome()
+    public function isBoxablePackets(): bool
     {
-        $productCodeOptions = $this->getProductCodeOptions();
+        return $this->compareProductCodeToGroup('boxable_packets');
+    }
 
-        if ($productCodeOptions === null) {
-            return false;
-        }
+    public function isInternationalPacket(): bool
+    {
+        return $this->compareProductCodeToGroup('priority_options');
+    }
 
-        return $productCodeOptions['group'] == 'extra_at_home_options';
+    public function isExtraAtHome(): bool
+    {
+        return $this->compareProductCodeToGroup('extra_at_home_options');
+    }
+
+    public function isEuOption(): bool
+    {
+        return $this->compareProductCodeToGroup('eu_options');
     }
 
     /**
@@ -758,13 +796,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     public function isBuspakjeShipment()
     {
-        $productCodeOptions = $this->getProductCodeOptions();
-
-        if ($productCodeOptions == null) {
-            return false;
-        }
-
-        return $productCodeOptions['group'] == 'buspakje_options';
+        return $this->compareProductCodeToGroup('buspakje_options');
     }
 
     /**
@@ -772,13 +804,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     public function isDomesticShipment()
     {
-        $productCodeOptions = $this->getProductCodeOptions();
-
-        if ($productCodeOptions == null) {
-            return false;
-        }
-
-        return $productCodeOptions['group'] == 'standard_options';
+        return $this->compareProductCodeToGroup('standard_options');
     }
 
     /**
@@ -786,13 +812,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
      */
     public function isIDCheck()
     {
-        $productCodeOptions = $this->getProductCodeOptions();
-
-        if ($productCodeOptions === null) {
-            return false;
-        }
-
-        return $productCodeOptions['group'] == 'id_check_options';
+        return $this->compareProductCodeToGroup('id_check_options');
     }
 
     /**
@@ -902,6 +922,10 @@ class Shipment extends AbstractModel implements ShipmentInterface
         if ($this->getConfirmedAt()) {
             return false;
         }
+        // Only domestic shipping allowed for multiple parcels
+        if ($this->getShipmentCountry() !== 'NL' && $this->getShipmentCountry() !== 'BE') {
+            return false;
+        }
 
         return true;
     }
@@ -946,7 +970,7 @@ class Shipment extends AbstractModel implements ShipmentInterface
     }
 
     /**
-     * @param $value
+     * @param int $value
      *
      * @return $this
      */
@@ -956,11 +980,11 @@ class Shipment extends AbstractModel implements ShipmentInterface
     }
 
     /**
-     * @return bool
+     * @return int
      */
     public function getIsSmartReturn()
     {
-        return $this->getData(static::FIELD_IS_SMART_RETURN);
+        return (int)$this->getData(static::FIELD_IS_SMART_RETURN);
     }
 
     /**
@@ -997,5 +1021,33 @@ class Shipment extends AbstractModel implements ShipmentInterface
     public function getSmartReturnEmailSent()
     {
         return $this->getData(static::FIELD_SMART_RETURN_EMAIL_SENT);
+    }
+
+    /**
+     * @param $value
+     *
+     * @return \TIG\PostNL\Api\Data\ShipmentInterface
+     */
+    public function setInsuredTier($value)
+    {
+        return $this->setData(static::FIELD_INSURED_TIER, $value);
+    }
+
+    /**
+     * @return string
+     */
+    public function getInsuredTier()
+    {
+        return $this->getData(static::FIELD_INSURED_TIER);
+    }
+
+    public function setReturnStatus(int $value): ShipmentInterface
+    {
+        return $this->setData(static::FIELD_RETURN_STATUS, $value);
+    }
+
+    public function getReturnStatus(): int
+    {
+        return (int)$this->getData(static::FIELD_RETURN_STATUS);
     }
 }

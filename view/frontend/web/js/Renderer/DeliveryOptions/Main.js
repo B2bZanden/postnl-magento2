@@ -1,33 +1,3 @@
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
 define([
     'uiComponent',
     'ko',
@@ -97,15 +67,18 @@ define([
         }),
 
         canUsePickupLocations: ko.computed(function () {
-            var isActive = window.checkoutConfig.shipping.postnl.pakjegemak_active;
-            var isActiveBe = window.checkoutConfig.shipping.postnl.pakjegemak_be_active;
-            var pickupOptionsAreAvailable = State.pickupOptionsAreAvailable();
+            const isActive = window.checkoutConfig.shipping.postnl.pakjegemak_active;
+            const isActiveBe = window.checkoutConfig.shipping.postnl.pakjegemak_be_active;
+            const isActiveGlobal = window.checkoutConfig.shipping.postnl.pakjegemak_global;
+            const pickupOptionsAreAvailable = State.pickupOptionsAreAvailable();
+            const countries = window.checkoutConfig.shipping.postnl.pakjegemak_countries;
 
-            var address = AddressFinder();
-            var isNL = (address !== null && address !== false && address.country === 'NL');
-            var isBE = (address !== null && address !== false && address.country === 'BE');
+            const address = AddressFinder();
+            const isNL = (address !== null && address !== false && address.country === 'NL');
+            const isBE = (address !== null && address !== false && address.country === 'BE');
+            const isGlobal = (address !== null && address !== false && countries.indexOf(address.country) > -1);
 
-            return ((isActive === 1 && isNL) || (isActiveBe === 1 && isBE)) && pickupOptionsAreAvailable;
+            return ((isActive === 1 && isNL) || (isActiveBe === 1 && isBE) || (isActiveGlobal === 1 && isGlobal)) && pickupOptionsAreAvailable;
         }),
 
         setDelivery: function () {

@@ -1,44 +1,17 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
-namespace TIG\PostNL\Api\Data;
 
-// @codingStandardsIgnoreFile
-use TIG\PostNL\Model\Order;
+namespace TIG\PostNL\Api\Data;
 
 /**
  * Too many public methods for the code inspection.
+ * @api
  */
 interface ShipmentInterface
 {
+    public const RETURN_STATUS_DEFAULT = 0;
+    public const RETURN_STATUS_BLOCKED = 1;
+    public const RETURN_STATUS_RELEASED = 2;
+
     /**
      * @return int|null
      */
@@ -101,6 +74,11 @@ interface ShipmentInterface
     public function getProductCode();
 
     /**
+     * @return string|null
+     */
+    public function getShortProductCode(): ?string;
+
+    /**
      * @param string $value
      * @return \TIG\PostNL\Api\Data\ShipmentInterface
      */
@@ -146,6 +124,18 @@ interface ShipmentInterface
      * @return string|null
      */
     public function getAcOption();
+
+    /**
+     * @param $value
+     *
+     * @return \TIG\PostNL\Api\Data\OrderInterface
+     */
+    public function setAcInformation($value);
+
+    /**
+     * @return string|null
+     */
+    public function getAcInformation();
 
     /**
      * @param string $value
@@ -301,6 +291,12 @@ interface ShipmentInterface
     public function getDeliveryDateFormatted($format = 'd-m-Y H:i:s');
 
     /**
+     * @param string $key
+     * @return bool
+     */
+    public function isOptionFlagSet(string $key): bool;
+
+    /**
      * @return bool
      */
     public function isExtraCover();
@@ -308,7 +304,22 @@ interface ShipmentInterface
     /**
      * @return bool
      */
+    public function isCodeAtDoor(): bool;
+
+    /**
+     * @return bool
+     */
     public function isGlobalPack();
+
+    /**
+     * @return bool
+     */
+    public function isBoxablePackets(): bool;
+
+    /**
+     * @return bool
+     */
+    public function isInternationalPacket(): bool;
 
     /**
      * @return bool
@@ -367,14 +378,14 @@ interface ShipmentInterface
     public function getReturnBarcodes();
 
     /**
-     * @param $value
+     * @param int $value
      *
      * @return TIG\PostNL\Api\Data\ShipmentInterface
      */
     public function setIsSmartReturn($value);
 
     /**
-     * @return boolean
+     * @return int
      */
     public function getIsSmartReturn();
 
@@ -404,4 +415,30 @@ interface ShipmentInterface
      * @return boolean
      */
     public function getSmartReturnEmailSent();
+
+    /**
+     * @param $value
+     *
+     * @return \TIG\PostNL\Api\Data\ShipmentInterface
+     */
+    public function setInsuredTier($value);
+
+    /**
+     * @return string
+     */
+    public function getInsuredTier();
+
+    /**
+     * @param int $value
+     *
+     * @return \TIG\PostNL\Api\Data\ShipmentInterface
+     */
+    public function setReturnStatus(int $value): ShipmentInterface;
+
+    /**
+     * @return int
+     */
+    public function getReturnStatus(): int;
+
+
 }

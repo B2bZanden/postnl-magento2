@@ -1,80 +1,32 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Block\Adminhtml\Shipment;
 
 use Magento\Backend\Block\Widget\Context;
-use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Framework\Registry;
 use Magento\Shipping\Block\Adminhtml\View as MagentoView;
 use TIG\PostNL\Config\Provider\ReturnOptions;
 use TIG\PostNL\Config\Validator\ValidAddress;
 use TIG\PostNL\Model\Shipment as PostNLShipment;
 use TIG\PostNL\Model\ShipmentRepository as PostNLShipmentRepository;
+use TIG\PostNL\Service\Shipment\ErsCountries;
 
 // @codingStandardsIgnoreFile
 class View extends MagentoView
 {
-    /** @var \TIG\PostNL\Model\ShipmentRepository $postNLShipmentRepository */
-    private $postNLShipmentRepository;
+    private PostNLShipmentRepository $postNLShipmentRepository;
+    private ValidAddress $validAddress;
+    private ReturnOptions $returnOptions;
 
-    /** @var \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder */
-    private $searchCriteriaBuilder;
-
-    /** @var \TIG\PostNL\Config\Validator\ValidAddress $validAddress */
-    private $validAddress;
-
-    /** @var ReturnOptions  */
-    private $returnOptions;
-
-    /**
-     * @param Context                  $context
-     * @param Registry                 $registry
-     * @param PostNLShipmentRepository $shipmentRepository
-     * @param SearchCriteriaBuilder    $searchCriteriaBuilder
-     * @param ValidAddress             $validAddress
-     * @param ReturnOptions            $returnOptions
-     * @param array                    $data
-     */
     public function __construct(
         Context $context,
         Registry $registry,
         PostNLShipmentRepository $shipmentRepository,
-        SearchCriteriaBuilder $searchCriteriaBuilder,
         ValidAddress $validAddress,
         ReturnOptions $returnOptions,
         array $data = []
     ) {
         $this->postNLShipmentRepository = $shipmentRepository;
-        $this->searchCriteriaBuilder    = $searchCriteriaBuilder;
         $this->validAddress             = $validAddress;
         $this->returnOptions            = $returnOptions;
 
@@ -115,15 +67,23 @@ class View extends MagentoView
         $this->setPostNLPrintLabelWithoutConfirmButton();
         $this->setPostNLPrintPackingslipButton();
 
-        if ($this->returnOptions->isSmartReturnActive()) {
+        $countryId = $this->getShipment()->getShippingAddress()->getCountryId();
+
+        if ($countryId === 'NL' && $this->returnOptions->isSmartReturnActive()) {
             $this->setPostNLSendSmartReturnButton();
+        }
+        if (ErsCountries::isIncluded($countryId) && $this->returnOptions->isEasyReturnServiceActive()) {
+            $this->setEasyReturnServiceButton();
+        }
+        if ($countryId === 'BE') {
+            $this->setPostNLSingleLabelReturnButton();
         }
     }
 
     /**
      * Add the PostNL print label button.
      */
-    private function setPostNLPrintLabelButton()
+    private function setPostNLPrintLabelButton(): void
     {
         $this->buttonList->add(
             'postnl_print',
@@ -138,7 +98,7 @@ class View extends MagentoView
     /**
      * Add the PostNL cancel confirmation button.
      */
-    private function setPostNLCancelConfirmButton()
+    private function setPostNLCancelConfirmButton(): void
     {
         $this->buttonList->add(
             'postnl_cancel_confirm',
@@ -155,7 +115,7 @@ class View extends MagentoView
         );
     }
 
-    private function setPostNLPrintLabelWithoutConfirmButton()
+    private function setPostNLPrintLabelWithoutConfirmButton(): void
     {
         $postNLShipment = $this->getPostNLShipment();
         $mainBarcode    = $postNLShipment->getMainBarcode();
@@ -170,7 +130,7 @@ class View extends MagentoView
         );
     }
 
-    private function setPostNLPrintPackingslipButton()
+    private function setPostNLPrintPackingslipButton(): void
     {
         $this->buttonList->add(
             'postnl_print_packingslip',
@@ -182,7 +142,7 @@ class View extends MagentoView
         );
     }
 
-    private function setPostNLConfirmButton()
+    private function setPostNLConfirmButton(): void
     {
         $this->buttonList->add(
             'postnl_confirm_shipment',
@@ -194,7 +154,7 @@ class View extends MagentoView
         );
     }
 
-    private function setPostNLSendSmartReturnButton()
+    private function setPostNLSendSmartReturnButton(): void
     {
         $this->buttonList->add(
             'postnl_send_smart_return',
@@ -206,10 +166,34 @@ class View extends MagentoView
         );
     }
 
+    private function setEasyReturnServiceButton(): void
+    {
+        $this->buttonList->add(
+            'postnl_send_ers',
+            [
+                'label' => __('PostNL - Easy Return Service'),
+                'class' => 'save primary',
+                'onclick' => 'setLocation(\'' . $this->getSendErsUrl() . '\')',
+            ]
+        );
+    }
+
+    private function setPostNLSingleLabelReturnButton(): void
+    {
+        $this->buttonList->add(
+            'postnl_send_single_label_return',
+            [
+                'label' => __('PostNL - Generate return label'),
+                'class' => 'save primary',
+                'onclick' => 'download(\'' . $this->getBothShipmentUrl('GetSingleBeReturnLabel') . '\')',
+            ]
+        );
+    }
+
     /**
      * Set the correct text.
      */
-    private function setPostNLPrintLabelButtonData()
+    private function setPostNLPrintLabelButtonData(): void
     {
         /** @var PostNLShipment $postNLShipment */
         $postNLShipment = $this->getPostNLShipment();
@@ -268,30 +252,28 @@ class View extends MagentoView
         );
     }
 
-    /**
-     * @return string
-     */
-    private function getCancelConfirmationUrl()
+    private function getCancelConfirmationUrl(): string
     {
-        /** @var PostNLShipment $postNLShipment */
-        $postNLShipment = $this->getPostNLShipment();
-
-        return $this->getUrl(
-            'postnl/shipment/CancelConfirmation',
-            [
-                'postnl_shipment_id' => $postNLShipment->getId(),
-                'shipment_id'        => $this->getShipment()->getId(),
-            ]
-        );
+        return $this->getBothShipmentUrl('CancelConfirmation');
     }
 
-    private function getSendSmartReturnUrl()
+    private function getSendSmartReturnUrl(): string
+    {
+        return $this->getBothShipmentUrl('GetSmartReturnLabel');
+    }
+
+    private function getSendErsUrl(): string
+    {
+        return $this->getBothShipmentUrl('GetEasyReturnServiceLabel');
+    }
+
+    private function getBothShipmentUrl(string $urlKey): string
     {
         /** @var PostNLShipment $postNLShipment */
         $postNLShipment = $this->getPostNLShipment();
 
         return $this->getUrl(
-            'postnl/shipment/GetSmartReturnLabel',
+            'postnl/shipment/' . $urlKey,
             [
                 'postnl_shipment_id' => $postNLShipment->getId(),
                 'shipment_id'        => $this->getShipment()->getId(),

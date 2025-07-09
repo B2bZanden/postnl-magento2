@@ -1,39 +1,15 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipment;
 
 use TIG\PostNL\Api\Data\ShipmentInterface;
+use TIG\PostNL\Api\Data\ShipmentLabelInterface;
 use TIG\PostNL\Config\Provider\LabelAndPackingslipOptions;
 use TIG\PostNL\Config\Provider\ReturnOptions;
+use TIG\PostNL\Config\Provider\ShippingOptions;
+use TIG\PostNL\Config\Source\Settings\LabelReturnSettings;
+use TIG\PostNL\Config\Source\Settings\LabelSettings;
+use TIG\PostNL\Config\Source\Settings\ReturnTypes;
 use TIG\PostNL\Service\Order\ProductInfo;
 use TIG\PostNL\Service\Volume\Items\Calculate;
 use TIG\PostNL\Webservices\Api\DeliveryDateFallback;
@@ -76,6 +52,9 @@ class Data
      */
     private $returnOptions;
 
+    /** @var ShippingOptions */
+    private $shippingOptions;
+
     /**
      * @param ProductOptions             $productOptions
      * @param ContentDescription         $contentDescription
@@ -84,6 +63,7 @@ class Data
      * @param Customs                    $customs
      * @param DeliveryDateFallback       $deliveryDateFallback
      * @param ReturnOptions              $returnOptions
+     * @param ShippingOptions            $shippingOptions
      */
     public function __construct(
         ProductOptions             $productOptions,
@@ -92,7 +72,8 @@ class Data
         LabelAndPackingslipOptions $labelAndPackingslipOptions,
         Customs                    $customs,
         DeliveryDateFallback       $deliveryDateFallback,
-        ReturnOptions              $returnOptions
+        ReturnOptions              $returnOptions,
+        ShippingOptions            $shippingOptions
     ) {
         $this->productOptions             = $productOptions;
         $this->contentDescription         = $contentDescription;
@@ -101,6 +82,7 @@ class Data
         $this->customsInfo                = $customs;
         $this->deliveryDateFallback       = $deliveryDateFallback;
         $this->returnOptions              = $returnOptions;
+        $this->shippingOptions            = $shippingOptions;
     }
 
     /**
@@ -115,6 +97,7 @@ class Data
     {
         $shipmentData = $this->getDefaultShipmentData($shipment, $address, $contact, $currentShipmentNumber);
         $shipmentData = $this->setMandatoryShipmentData($shipment, $currentShipmentNumber, $shipmentData);
+        $shipmentData = $this->addCustomShipmentData($shipment, $currentShipmentNumber, $shipmentData);
 
         return $shipmentData;
     }
@@ -161,7 +144,7 @@ class Data
             'DownPartnerID'            => $shipment->getDownpartnerId(),
             'DownPartnerLocation'      => $shipment->getDownpartnerLocation(),
             'DownPartnerBarcode'       => $shipment->getDownpartnerBarcode(),
-            'ProductCodeDelivery'      => $shipment->getProductCode(),
+            'ProductCodeDelivery'      => ((int)$shipment->getProductCode()) % 10000,
             'ReturnBarcode'            => $shipment->getReturnBarcodes($currentShipmentNumber),
             'Reference'                => $this->labelAndPackingslipOptions->getReference($shipment->getShipment())
         ];
@@ -193,6 +176,7 @@ class Data
     private function setMandatoryShipmentData(ShipmentInterface $shipment, $currentShipmentNumber, array $shipmentData)
     {
         $magentoShipment = $shipment->getShipment();
+        $countryId = $shipmentData['Addresses']['Address'][0]['Countrycode'] ?? null;
         if ($shipment->isExtraAtHome()) {
             $shipmentData['Content'] = $this->contentDescription->get($shipment);
             $shipmentData['Dimension']['Volume'] = $this->getVolumeByParcelCount(
@@ -201,7 +185,7 @@ class Data
             $shipmentData['Reference'] = $this->labelAndPackingslipOptions->getReference($magentoShipment);
         }
 
-        if ($shipment->isGlobalPack()) {
+        if ($this->isCustomsAllowed($shipment, $countryId)) {
             $shipmentData['Customs'] = $this->customsInfo->get($shipment);
         }
 
@@ -214,14 +198,63 @@ class Data
         }
 
         $productOptions = $this->productOptions->get($shipment);
-        if ($productOptions) {
+        if (!is_array($productOptions)) {
+            $productOptions = [];
+        }
+        $returnActive = $this->returnOptions->isReturnActive();
+        // Disable return codes for packets
+        if ($shipment->isInternationalPacket() || $shipment->isBoxablePackets()) {
+            $returnActive = false;
+        }
+        if ($returnActive && $countryId === 'NL' &&
+            $this->returnOptions->getReturnLabel() === LabelSettings::LABEL_RETURN
+        ) {
+            $productOptions[] = [
+                'Characteristic' => '152',
+                'Option'         => '026'
+            ];
+            // Fill out ReturnBarcode with the same data as Barcode in this case
+            $shipmentData['ReturnBarcode'] = $shipmentData['Barcode'];
+        }
+        if ($returnActive && ($countryId === 'NL' || $countryId === 'BE')
+            && $this->returnOptions->getReturnLabel() === LabelSettings::LABEL_BOX) {
+            $productOptions[] = [
+                'Characteristic' => '152',
+                'Option'         => '028'
+            ];
+            $productOptions[] = [
+                'Characteristic' => '191',
+                'Option'         => '001'
+            ];
+            //$shipmentData['ReturnBarcode'] = $shipmentData['Barcode'];
+        }
+        if ($returnActive && $countryId === 'NL'
+            && $this->returnOptions->getReturnLabel() !== LabelSettings::LABEL_BOX
+            && $this->returnOptions->getReturnLabelType() === LabelReturnSettings::LABEL_RETURN_ORDER) {
+            // Mark shipment as blocked.
+            $shipment->setReturnStatus($shipment::RETURN_STATUS_BLOCKED);
+            $productOptions[] = [
+                'Characteristic' => '191',
+                'Option'         => '004'
+            ];
+        }
+
+        if ($shipment->isCodeAtDoor()) {
+            $productOptions[] = [
+                'Characteristic' => '004',
+                'Option'         => '020'
+            ];
+        }
+
+        if (!empty($productOptions)) {
             $shipmentData['ProductOptions'] = $productOptions;
         }
 
         $smartReturnActive = $this->returnOptions->isSmartReturnActive();
-        if ($smartReturnActive && $shipment->getIsSmartReturn()) {
+        if ($smartReturnActive && $shipment->getIsSmartReturn() === ShipmentLabelInterface::RETURN_LABEL_SMART_RETURN) {
             $shipmentData['ProductOptions']      = $this->getSmartReturnOptions();
-            $shipmentData['ProductCodeDelivery'] = '2285';
+            $shipmentData['ProductCodeDelivery'] =
+                $this->returnOptions->getReturnTo() === ReturnTypes::TYPE_FREE_POST ? '2285' : '3285';
         }
 
         return $shipmentData;
@@ -236,7 +269,16 @@ class Data
     private function getAmount(ShipmentInterface $shipment)
     {
         $amounts = [];
-        $extraCoverAmount = $shipment->getExtraCoverAmount();
+
+        $extraCoverAmount = $shipment->getInsuredTier();
+
+        if (empty($extraCoverAmount)) {
+            $extraCoverAmount = $this->shippingOptions->getInsuredTier();
+        }
+
+        if ($extraCoverAmount == 'default') {
+            $extraCoverAmount = $shipment->getExtraCoverAmount();
+        }
 
         $amounts[] = [
             'AccountName'       => '',
@@ -273,12 +315,12 @@ class Data
      */
     private function getWeightByParcelCount($weight, $count)
     {
-        // Devision by zero not allowed.
+        // Division by zero not allowed.
         $weight = round(($weight ?: 1) / ($count ?: 1), 3);
         // convert kgs to grams because PostNL only accepts grams
         $weight = $weight * 1000;
 
-        return $weight <= 1000 ? 1000 : $weight;
+        return $weight;
     }
 
     /**
@@ -310,5 +352,27 @@ class Data
                 'Option'         => '025'
             ]
         ];
+    }
+
+    private function isCustomsAllowed(ShipmentInterface $shipment, ?string $countryId): bool
+    {
+        return $shipment->isGlobalPack() || // Some legacy stuff first
+            $shipment->isBoxablePackets() ||
+            // And add customers on all non-NL/non-BE countries.
+            ($countryId !== null && $countryId !== 'NL' && $countryId !== 'BE');
+    }
+
+    private function addCustomShipmentData(ShipmentInterface $shipment, int $currentShipmentNumber, array $shipmentData)
+    {
+        $postnlOrder  = $shipment->getPostNLOrder();
+        $productCode = $shipment->getProductCode();
+        if (strlen($productCode) > 4) {
+            $productCode = substr($productCode, 1);
+        }
+        if ($shipment->getShipmentType() === 'PG' && $productCode === '4907') {
+            $shipmentData['DownPartnerID'] = $postnlOrder->getPgRetailNetworkId();
+            $shipmentData['DownPartnerLocation'] = $postnlOrder->getPgLocationCode();
+        }
+        return $shipmentData;
     }
 }

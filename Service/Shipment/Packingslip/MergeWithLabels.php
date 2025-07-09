@@ -1,38 +1,10 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Service\Shipment\Packingslip;
 
 use Magento\Framework\Message\Manager as MessageManager;
 use TIG\PostNL\Api\Data\ShipmentLabelInterface;
+use TIG\PostNL\Config\Source\Settings\LabelTypeSettings;
 use TIG\PostNL\Service\Order\ProductInfo;
 use TIG\PostNL\Service\Pdf\Fpdi;
 use TIG\PostNL\Service\Pdf\FpdiFactory;
@@ -123,6 +95,9 @@ class MergeWithLabels
     public function merge($shipmentId, $packingslip, $mergeFirstLabel = false, $confirm = true)
     {
         $labels = $this->getLabels->get($shipmentId, $confirm);
+        $labels = array_filter($labels, function($label) {
+            return $label->getLabelFileFormat() === LabelTypeSettings::TYPE_PDF;
+        });
         if (empty($labels)) {
             return $packingslip;
         }
@@ -138,7 +113,7 @@ class MergeWithLabels
             unset($labels['notices']);
         }
 
-        if ($mergeFirstLabel && $this->canMergeFirstLabel($labels[0])) {
+        if ($mergeFirstLabel && $this->canMergeFirstLabel(reset($labels))) {
             $firstLabel = array_shift($labels);
             $label = base64_decode($firstLabel->getLabel());
             $packingslip = $this->mergeFirstLabel($label, $packingslip, $firstLabel->getType());
@@ -216,6 +191,10 @@ class MergeWithLabels
             $this->setEpsPosition();
         }
 
+        if ($type === ProductInfo::OPTION_BOXABLE_PACKETS || $type === ProductInfo::OPTION_INTENATIONAL_PACKET) {
+            $this->setBoxablePacketsPosition();
+        }
+
         $pdf->Rotate($this->rotation);
         $pdf->addSinglePage(
             $labelFile,
@@ -233,6 +212,14 @@ class MergeWithLabels
     }
 
     private function setEpsPosition()
+    {
+        $this->rotation  = 0;
+        $this->xPosition = 400;
+        $this->yPosition = 560;
+        $this->width     = 390;
+    }
+
+    private function setBoxablePacketsPosition()
     {
         $this->rotation  = 0;
         $this->xPosition = 400;

@@ -1,37 +1,8 @@
 <?php
-/**
- *
- *          ..::..
- *     ..::::::::::::..
- *   ::'''''':''::'''''::
- *   ::..  ..:  :  ....::
- *   ::::  :::  :  :   ::
- *   ::::  :::  :  ''' ::
- *   ::::..:::..::.....::
- *     ''::::::::::::''
- *          ''::''
- *
- *
- * NOTICE OF LICENSE
- *
- * This source file is subject to the Creative Commons License.
- * It is available through the world-wide-web at this URL:
- * http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- * If you are unable to obtain it through the world-wide-web, please send an email
- * to servicedesk@tig.nl so we can send you a copy immediately.
- *
- * DISCLAIMER
- *
- * Do not edit or add to this file if you wish to upgrade this module to newer
- * versions in the future. If you wish to customize this module for your
- * needs please contact servicedesk@tig.nl for more information.
- *
- * @copyright   Copyright (c) Total Internet Group B.V. https://tig.nl/copyright
- * @license     http://creativecommons.org/licenses/by-nc-nd/3.0/nl/deed.en_US
- */
+
 namespace TIG\PostNL\Config\Source\Options;
 
-use Magento\Framework\Option\ArrayInterface;
+use Magento\Framework\Data\OptionSourceInterface;
 use Magento\Quote\Model\Quote\Address as QuoteAddress;
 use Magento\Sales\Model\Order\Address as SalesAddress;
 use TIG\PostNL\Config\Source\OptionsAbstract;
@@ -42,7 +13,7 @@ use TIG\PostNL\Service\Shipment\GuaranteedOptions;
  * As this class holds all the methods to retrieve correct product codes, it is too long for Code Sniffer to check.
  */
 // @codingStandardsIgnoreFile
-class ProductOptions extends OptionsAbstract implements ArrayInterface
+class ProductOptions extends OptionsAbstract implements OptionSourceInterface
 {
     /**
      * @var CanaryIslandToIC
@@ -109,25 +80,6 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
     }
 
     /**
-     * Returns options if sunday is true
-     * @return array
-     */
-    public function getIsSundayOptions()
-    {
-        return $this->getProductOptions(['isSunday' => true]);
-    }
-
-    /**
-     * Return options where Today is true
-     *
-     * @return array|array[]
-     */
-    public function getIsTodayOptions()
-    {
-        return $this->getProductOptions(['isToday' => true]);
-    }
-
-    /**
      * Returns options if group equals pakjegemak_options
      * @return array
      */
@@ -162,6 +114,17 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
     }
 
     /**
+     * Returns options if group equals pakjegemak_be_nl_options
+     * @return array
+     */
+    public function getPakjeGemakBeNlOptions()
+    {
+        $flags = [];
+        $flags['groups'][] = ['group' => 'pakjegemak_be_nl_options'];
+        return $this->getProductOptions($flags);
+    }
+
+    /**
      * Returns options if group equals standard_options
      * @return array
      */
@@ -170,7 +133,6 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
         $flags = [];
         $flags['groups'][] = ['group' => 'standard_options'];
         $flags['groups'][] = ['group' => 'id_check_options'];
-        $flags['groups'][] = ['group' => 'cargo_options'];
 
         return $this->getProductOptions($flags);
     }
@@ -184,7 +146,7 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
     }
 
     /**
-     * @param SalesAddress|QuoteAddress|false $address
+     * @param SalesAddress|QuoteAddress|array|false $address
      *
      * @return array
      */
@@ -233,6 +195,16 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
         return $beDomesticOptions;
     }
 
+    /**
+     * @return array
+     */
+    public function getBeNlOptions()
+    {
+        $options = $this->getProductOptions(['group' => 'be_nl_options']);
+
+        return $options;
+    }
+
 
     /**
      * @return array
@@ -253,6 +225,16 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
         $priorityOptions = $this->getProductOptions(['group' => 'priority_options']);
 
         return $priorityOptions;
+    }
+
+    /**
+     * @return array
+     */
+    public function getBoxableOptions()
+    {
+        $boxablePackets = $this->getProductOptions(['group' => 'boxable_packets']);
+
+        return $boxablePackets;
     }
 
     /**
@@ -326,10 +308,6 @@ class ProductOptions extends OptionsAbstract implements ArrayInterface
         $productOption = $this->getOptionsByCode($code);
         if (!$productOption) {
             return null;
-        }
-
-        if ($productOption['group'] == 'cargo_options') {
-            return GuaranteedOptions::GUARANTEED_TYPE_CARGO;
         }
 
         return GuaranteedOptions::GUARANTEED_TYPE_PACKAGE;
